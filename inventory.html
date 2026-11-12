@@ -462,7 +462,8 @@ function renderFiles(k){
     r.appendChild(el("span",{style:"flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},"📎 "+f.name+" ("+fmtSize(f.size)+")"));
     const x=el("button",{class:"sb d"},"✕");
     x.onclick=()=>{const st=FC[k];st.tmp=st.tmp.filter(t=>t.id!==f.id);if(st.added.includes(f.id)){st.added=st.added.filter(i=>i!==f.id);delFile(f.id);}else st.removed.push(f.id);renderFiles(k);};
-    r.appendChild(x);box.appendChild(r);
+    const ob=el("button",{class:"sb p",style:"flex:0 0 56px"},"فتح");ob.onclick=()=>openFile(f.id,f.name,f.type);
+    r.appendChild(ob);r.appendChild(x);box.appendChild(r);
   });
 }
 async function addFiles(k,inp){
@@ -478,11 +479,18 @@ async function addFiles(k,inp){
 function addCustFiles(inp){return addFiles("cust",inp);}
 function finishFiles(k){FC[k].removed.forEach(delFile);FC[k].added=[];FC[k].removed=[];}
 function abortFiles(k){FC[k].added.forEach(delFile);FC[k].added=[];FC[k].removed=[];}
-async function openFile(id,name){
-  let w=null;try{w=window.open("","_blank");}catch(e){}
-  try{const b=await getFile(id);if(!b){if(w)w.close();showAlert("الملف غير موجود على هذا الجهاز","error");return;}
-    const u=URL.createObjectURL(b);if(w)w.location=u;else{const a=document.createElement("a");a.href=u;a.target="_blank";a.download=name;document.body.appendChild(a);a.click();a.remove();}}
-  catch(e){if(w)w.close();showAlert("تعذّر فتح الملف","error");}
+async function openFile(id,name,type){
+  try{
+    const b=await getFile(id);
+    if(!b){showAlert("الملف غير موجود على هذا الجهاز","error");return;}
+    const u=URL.createObjectURL(b);
+    const a=document.createElement("a");a.href=u;a.rel="noopener";
+    const isPdf=(type||b.type||"").includes("pdf")||/\.pdf$/i.test(name||"");
+    if(isPdf){a.download=name||"file.pdf";showAlert("جاري تنزيل الملف... افتحه من الإشعارات أو التنزيلات");}
+    else a.target="_blank";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),60000);
+  }catch(e){showAlert("تعذّر فتح الملف","error");}
 }
 function cancelCust(){abortFiles("cust");closeCustModal();}
 function openCustModal(id){
@@ -629,7 +637,7 @@ function drawInvList(){
     if(m.notes){const n=div("","font-size:11.5px;color:#8A97AD;margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden");n.textContent="📝 "+m.notes;cd.appendChild(n);}
     if(m.link){const l=el("a",{href:m.link,target:"_blank",rel:"noopener",style:"display:inline-block;margin-top:5px;font-size:11.5px;color:#9DB4FF;text-decoration:none"},"🔗 فتح الملف");cd.appendChild(l);}
     if((m.files||[]).length){const fr=div("","display:flex;gap:5px;flex-wrap:wrap;margin-top:5px");
-      m.files.forEach(f=>{const b=el("button",{class:"chip",style:"max-width:100%;overflow:hidden;text-overflow:ellipsis"},"📎 "+f.name);b.onclick=()=>openFile(f.id,f.name);fr.appendChild(b);});cd.appendChild(fr);}
+      m.files.forEach(f=>{const b=el("button",{class:"chip",style:"max-width:100%;overflow:hidden;text-overflow:ellipsis"},"📎 "+f.name);b.onclick=()=>openFile(f.id,f.name,f.type);fr.appendChild(b);});cd.appendChild(fr);}
     const btns=div("row","margin-top:8px");
     const mk=(t,cls,fn)=>{const b=el("button",{class:"sb "+cls},t);b.onclick=fn;btns.appendChild(b);};
     mk("✏️ تعديل","",()=>startEditMat(m.id));
@@ -788,27 +796,41 @@ function rHistory(c){
     c.appendChild(empty);return;
   }
   list.forEach(e=>{
-    const cd=card();
-    const top=div("","display:flex;justify-content:space-between;margin-bottom:8px");
-    top.innerHTML='<span style="font-weight:700;font-size:14px">🧪 '+esc(e.name)+'</span><span style="font-size:12px;color:#64748b">'+esc(e.date)+'</span>';
-    cd.appendChild(top);
-    {
-      const cu=div("","font-size:12px;color:#a5b4fc;margin-bottom:6px");
-      cu.innerHTML='👤 العميل: '+esc(custNameOf(e)||'بدون عميل');
-      cd.appendChild(cu);
-    }
+    const cd=card();cd.style.padding="0";
+    const head=div("row","padding:10px 12px;cursor:pointer;gap:8px");
+    const info=div("","flex:1;min-width:0");
+    info.innerHTML='<div style="font-weight:700;font-size:14px">🧪 '+esc(e.name)+'</div><div style="font-size:11px;color:#8A97AD;margin-top:2px">'+esc(e.date)+' · 👤 '+esc(custNameOf(e)||'بدون عميل')+' · '+e.items.length+' مواد</div>';
+    const chev=el("span",{style:"color:#8A97AD;font-size:12px"},expandedHist.has(e.id)?"▲":"▼");
+    const del=el("button",{class:"sb d"},"🗑️");
+    del.onclick=ev=>{ev.stopPropagation();deleteHistory(e.id);};
+    head.appendChild(info);head.appendChild(chev);head.appendChild(del);
+    cd.appendChild(head);
+    const body=div("","padding:0 12px 10px;border-top:1px solid #26324D;display:"+(expandedHist.has(e.id)?"block":"none"));
     e.items.forEach((item,i)=>{
-      const rd=div("","display:flex;justify-content:space-between;font-size:13px;color:#94a3b8;padding:3px 0"+(i>0?";border-top:1px solid rgba(255,255,255,0.05)":""));
+      const rd=div("","display:flex;justify-content:space-between;font-size:13px;color:#94a3b8;padding:4px 0"+(i>0?";border-top:1px solid rgba(255,255,255,0.05)":""));
       rd.innerHTML='<span>'+esc(item.name)+'</span><span style="color:#f87171">- '+item.used+' '+esc(item.unit)+'</span>';
-      cd.appendChild(rd);
+      body.appendChild(rd);
     });
     if(e.profit!=null){
       const pb=div("price-box","margin-top:8px;border-color:"+(e.profit>=0?"rgba(34,197,94,0.4)":"rgba(239,68,68,0.4)"));
       pb.innerHTML='<span class="price-label">'+(e.profit>=0?'📈 الربح':'📉 الخسارة')+'</span><span class="price-total" style="color:'+(e.profit>=0?'#4ade80':'#f87171')+'">'+Math.abs(e.profit).toFixed(2)+' ريال</span>';
-      cd.appendChild(pb);
+      body.appendChild(pb);
     }
+    cd.appendChild(body);
+    head.onclick=()=>{const o=body.style.display==="none";body.style.display=o?"block":"none";chev.textContent=o?"▲":"▼";if(o)expandedHist.add(e.id);else expandedHist.delete(e.id);};
     c.appendChild(cd);
   });
+}
+const expandedHist=new Set();
+function deleteHistory(id){
+  const e=S.history.find(h=>h.id===id);if(!e)return;
+  if(!confirm("حذف هذا السجل نهائياً؟"))return;
+  const restore=confirm("هل تريد إرجاع الكميات المخصومة إلى المخزون؟\n\nموافق = إرجاع الكميات\nإلغاء = حذف السجل فقط");
+  if(restore){e.items.forEach(it=>{const m=S.materials.find(m=>m.name===it.name&&m.unit===it.unit);if(m)m.quantity=+(m.quantity+it.used).toFixed(3);});}
+  S.history=S.history.filter(h=>h.id!==id);
+  const cu=e.customerId&&S.customers.find(c=>c.id===e.customerId);
+  if(cu&&cu.purchases)cu.purchases=cu.purchases.filter(p=>!(p.type==="formula"&&p.date===e.date&&p.name===e.name));
+  expandedHist.delete(id);save();render();showAlert(restore?"تم الحذف وإرجاع الكميات":"تم حذف السجل","error");
 }
 
 function rMaint(c){
@@ -931,7 +953,7 @@ function rCustomers(c){
         cust.files.forEach(f=>{
           const r=div("row","padding:6px 0;border-top:1px solid #26324D;font-size:12px");
           r.appendChild(el("span",{style:"flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},f.name+" ("+fmtSize(f.size)+")"));
-          const ob=el("button",{class:"sb p",style:"flex:0 0 60px"},"فتح");ob.onclick=()=>openFile(f.id,f.name);
+          const ob=el("button",{class:"sb p",style:"flex:0 0 60px"},"فتح");ob.onclick=()=>openFile(f.id,f.name,f.type);
           r.appendChild(ob);fc.appendChild(r);
         });
         c.appendChild(fc);
@@ -997,6 +1019,8 @@ function rCustomers(c){
     const badge=el("span",{style:"font-size:12px;color:#a5b4fc;background:rgba(99,102,241,0.15);padding:3px 10px;border-radius:20px"},purchCount+" عملية شراء"+((cust.files||[]).length?" · 📎"+cust.files.length:""));
     top2.appendChild(info);top2.appendChild(badge);
     cd.appendChild(top2);
+    if((cust.files||[]).length){const fr=div("","display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px");
+      cust.files.forEach(f=>{const b=el("button",{class:"chip",style:"max-width:100%;overflow:hidden;text-overflow:ellipsis"},"📎 "+f.name);b.onclick=()=>openFile(f.id,f.name,f.type);fr.appendChild(b);});cd.appendChild(fr);}
     const btnRow=div("row");
     const viewBtn=el("button",{class:"btn-blue",style:"flex:2"},"📜 سجل المشتريات");
     viewBtn.onclick=()=>viewCustomer(cust.id);
