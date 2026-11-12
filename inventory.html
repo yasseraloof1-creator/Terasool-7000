@@ -675,6 +675,21 @@ function rAdd(c){
   c.appendChild(el("div",{style:"text-align:center;font-size:12px;color:#8A97AD;margin-top:6px"},"💡 إذا كانت المادة موجودة بنفس الوحدة ستضاف الكمية على الموجودة"));
 }
 
+const expandedF=new Set();
+function foldHead(cd,key,title,sub,extra){
+  cd.style.padding="0";
+  const open=expandedF.has(key);
+  const head=div("row","padding:10px 12px;gap:8px;cursor:pointer");
+  const info=div("","flex:1;min-width:0");info.innerHTML=title;
+  const subEl=el("span",{style:"font-size:11px;color:#8A97AD;flex-shrink:0;white-space:nowrap"},sub);
+  const chev=el("span",{style:"color:#8A97AD;font-size:10px;flex-shrink:0"},open?"▲":"▼");
+  head.appendChild(info);head.appendChild(subEl);if(extra)head.appendChild(extra);head.appendChild(chev);
+  cd.appendChild(head);
+  const body=div("","padding:0 12px 10px;border-top:1px solid #26324D;display:"+(open?"block":"none"));
+  cd.appendChild(body);
+  head.onclick=()=>{const o=body.style.display==="none";body.style.display=o?"block":"none";chev.textContent=o?"▲":"▼";if(o)expandedF.add(key);else expandedF.delete(key);};
+  return body;
+}
 function rSaved(c){
   const hdr=div("section-title");
   const h=el("h2",{style:"margin:0"},"🧪 الخلطات قيد التعديل");
@@ -727,23 +742,22 @@ function rSaved(c){
       btnRow.appendChild(addBtn);btnRow.appendChild(saveBtn);btnRow.appendChild(cancelBtn);
       cd.appendChild(btnRow);
     } else {
-      const top=div("","display:flex;justify-content:space-between;margin-bottom:8px");
-      top.innerHTML='<span style="font-weight:700;font-size:15px">🧪 '+esc(f.name)+'</span><span style="font-size:12px;color:#64748b">'+f.rows.length+' مواد</span>';
-      cd.appendChild(top);
+      const tot0=fTotal(f.rows);
+      const bd=foldHead(cd,"s"+f.id,'<span style="font-weight:700;font-size:14px">🧪 '+esc(f.name)+'</span>',f.rows.length+" مواد"+(tot0>0?" · "+tot0.toFixed(2)+" ر":""));
       f.rows.forEach((row,i)=>{
         const m=S.materials.find(m=>m.id===row.materialId);
         const rd=div("","display:flex;justify-content:space-between;font-size:13px;color:#94a3b8;padding:3px 0"+(i>0?";border-top:1px solid rgba(255,255,255,0.05)":""));
         rd.innerHTML='<span>'+(m?esc(m.name):"—")+'</span><span>'+(row.amount||"")+" "+(m?m.unit:"")+'</span>';
-        cd.appendChild(rd);
+        bd.appendChild(rd);
       });
       const tot=fTotal(f.rows);
-      if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';cd.appendChild(pb);}
+      if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';bd.appendChild(pb);}
       const btnRow=div("row","margin-top:10px");
       const editBtn=el("button",{class:"btn btn-ghost",style:"flex:1;font-size:13px"},"✏️ تعديل");editBtn.onclick=()=>startEditFormula(f.id);
       const appBtn=el("button",{class:"btn btn-green",style:"flex:2;font-size:13px"},"✅ اعتماد الخلطة");appBtn.onclick=()=>approveFormula(f.id);
       const delBtn=el("button",{class:"btn-danger"},"🗑️");delBtn.onclick=()=>deleteFormula(f.id);
       btnRow.appendChild(editBtn);btnRow.appendChild(appBtn);btnRow.appendChild(delBtn);
-      cd.appendChild(btnRow);
+      bd.appendChild(btnRow);
     }
     c.appendChild(cd);
   });
@@ -758,23 +772,24 @@ function rApproved(c){
   }
   S.approvedFormulas.forEach(f=>{
     const cd=div("card card-green");
-    const top=div("","display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px");
-    top.innerHTML='<div><span style="font-weight:700;font-size:15px">✅ '+esc(f.name)+'</span><div style="font-size:11px;color:#64748b;margin-top:2px">اعتُمدت: '+esc(f.approvedAt)+'</div></div><span style="font-size:12px;padding:3px 10px;border-radius:20px;color:#4ade80;background:rgba(74,222,128,0.1)">ثابتة</span>';
-    cd.appendChild(top);
+    const tot0=fTotal(f.rows);
+    const quick=el("button",{class:"sb p",style:"flex:0 0 auto;padding:6px 10px"},"🧪 تطبيق");
+    quick.onclick=ev=>{ev.stopPropagation();openApplyModal(f.id);};
+    const bd=foldHead(cd,"a"+f.id,'<div style="font-weight:700;font-size:14px">✅ '+esc(f.name)+'</div><div style="font-size:10.5px;color:#64748b;margin-top:1px">اعتُمدت: '+esc(f.approvedAt)+'</div>',f.rows.length+" مواد"+(tot0>0?" · "+tot0.toFixed(2)+" ر":""),quick);
     f.rows.forEach((row,i)=>{
       const m=S.materials.find(m=>m.id===row.materialId);
       const rd=div("","display:flex;justify-content:space-between;font-size:13px;color:#94a3b8;padding:4px 0"+(i>0?";border-top:1px solid rgba(255,255,255,0.05)":""));
       rd.innerHTML='<span>'+(m?esc(m.name):"—")+'</span><span>'+(row.amount||"")+" "+(m?m.unit:"")+'</span>';
-      cd.appendChild(rd);
+      bd.appendChild(rd);
     });
     const tot=fTotal(f.rows);
-    if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';cd.appendChild(pb);}
+    if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';bd.appendChild(pb);}
     const btnRow=div("row","margin-top:10px");
     const applyBtn=el("button",{class:"btn",style:"flex:3;font-size:13px"},"🧪 تطبيق وخصم المخزون");applyBtn.onclick=()=>openApplyModal(f.id);
     const editBtn=el("button",{class:"btn btn-ghost",style:"flex:2;font-size:12px"},"✏️ إرجاع للتعديل");editBtn.onclick=()=>moveToEdit(f.id);
     const delBtn=el("button",{class:"btn-danger"},"🗑️");delBtn.onclick=()=>deleteApproved(f.id);
     btnRow.appendChild(applyBtn);btnRow.appendChild(editBtn);btnRow.appendChild(delBtn);
-    cd.appendChild(btnRow);c.appendChild(cd);
+    bd.appendChild(btnRow);c.appendChild(cd);
   });
 }
 
