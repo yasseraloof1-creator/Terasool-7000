@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0B1220">
-<link rel="manifest" href="sct-manifest.json">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="sct-manifest-v2.json">
+<link rel="icon" type="image/png" href="sct-icon-192.png">
+<link rel="apple-touch-icon" href="sct-icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -568,7 +568,7 @@ function el(tag,attrs,text){
 function div(cls,style){const d=document.createElement("div");if(cls)d.className=cls;if(style)d.style.cssText=style;return d;}
 function card(){return div("card");}
 
-let invFilter="",invQuery="",expandedMatId=null;const expandedMat=new Set();
+let invFilter="",invQuery="",expandedMatId=null;const expandedMat=new Set();let matReg={};
 function matForm(p){
   FC.mat.box=p+"FileList";
   return '<label class="lbl">اسم المادة</label><input id="'+p+'Name" class="inp" style="margin-bottom:8px">'+
@@ -599,7 +599,7 @@ function rInv(c){
   drawInvList();
 }
 function drawInvList(){
-  const c=document.getElementById("invList");if(!c)return;c.innerHTML="";
+  const c=document.getElementById("invList");if(!c)return;c.innerHTML="";matReg={};
   if(!S.materials.length){const e=div("empty");e.innerHTML='<div style="font-size:32px;margin-bottom:6px">📦</div><div>لا يوجد مواد بعد</div><div style="font-size:12px;margin-top:4px">ابدأ من تبويب إضافة مواد</div>';c.appendChild(e);return;}
   const q=invQuery.trim().toLowerCase();
   const items=S.materials.filter(m=>{
@@ -661,7 +661,13 @@ function drawInvList(){
       lb.innerHTML=h;body.appendChild(lb);
     }
     cd.appendChild(body);
-    head.onclick=()=>{const o=body.style.display==="none";body.style.display=o?"block":"none";chev.textContent=o?"▲":"▼";if(o)expandedMat.add(m.id);else expandedMat.delete(m.id);};
+    matReg[m.id]={body,chev};
+    head.onclick=()=>{
+      const o=body.style.display==="none";
+      if(o){expandedMat.forEach(id=>{const r=matReg[id];if(id!==m.id&&r){r.body.style.display="none";r.chev.textContent="▼";}});expandedMat.clear();expandedMat.add(m.id);}
+      else expandedMat.delete(m.id);
+      body.style.display=o?"block":"none";chev.textContent=o?"▲":"▼";
+    };
     c.appendChild(cd);
   });
 }
@@ -675,7 +681,7 @@ function rAdd(c){
   c.appendChild(el("div",{style:"text-align:center;font-size:12px;color:#8A97AD;margin-top:6px"},"💡 إذا كانت المادة موجودة بنفس الوحدة ستضاف الكمية على الموجودة"));
 }
 
-const expandedF=new Set();
+const expandedF=new Set();let foldReg={};
 function foldHead(cd,key,title,sub,extra){
   cd.style.padding="0";
   const open=expandedF.has(key);
@@ -687,10 +693,17 @@ function foldHead(cd,key,title,sub,extra){
   cd.appendChild(head);
   const body=div("","padding:0 12px 10px;border-top:1px solid #26324D;display:"+(open?"block":"none"));
   cd.appendChild(body);
-  head.onclick=()=>{const o=body.style.display==="none";body.style.display=o?"block":"none";chev.textContent=o?"▲":"▼";if(o)expandedF.add(key);else expandedF.delete(key);};
+  foldReg[key]={body,chev};
+  head.onclick=()=>{
+    const o=body.style.display==="none";
+    if(o){[...expandedF].forEach(k=>{const r=foldReg[k];if(k!==key&&k[0]===key[0]&&r){r.body.style.display="none";r.chev.textContent="▼";expandedF.delete(k);}});expandedF.add(key);}
+    else expandedF.delete(key);
+    body.style.display=o?"block":"none";chev.textContent=o?"▲":"▼";
+  };
   return body;
 }
 function rSaved(c){
+  foldReg={};
   const hdr=div("section-title");
   const h=el("h2",{style:"margin:0"},"🧪 الخلطات قيد التعديل");
   const newBtn=el("button",{class:"btn",style:"width:auto;padding:8px 16px;font-size:13px"},"➕ خلطة جديدة");
@@ -764,6 +777,7 @@ function rSaved(c){
 }
 
 function rApproved(c){
+  foldReg={};
   const h=el("h2",{},"✅ الخلطات الثابتة المعتمدة");c.appendChild(h);
   const sub=el("p",{style:"color:#64748b;font-size:13px;margin-bottom:14px"},"جاهزة للتطبيق مباشرة على المخزون");c.appendChild(sub);
   if(!S.approvedFormulas.length){
