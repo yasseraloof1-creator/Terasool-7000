@@ -137,8 +137,6 @@ h2{font-size:16px;font-weight:700;margin-bottom:8px}
     </div>
   </div>
   <div class="header-btns">
-    <span class="warn warn-stock" id="lowStockWarn" style="display:none"></span>
-    <span class="warn warn-stock" id="expWarn" style="display:none;cursor:pointer" onclick="invFilter='expiring';showView('inventory')"></span>
     <span class="warn warn-overdue" id="overdueWarn" style="display:none" onclick="showView('maintenance')"></span>
     <button class="btn-export" onclick="exportData()">⬇️ تصدير</button>
     <label class="btn-import-label">⬆️ استيراد<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
@@ -610,7 +608,14 @@ function drawInvList(){
     if(invFilter==="expiring"){const d=daysToExp(m);return d!==null&&d<=60;}
     return true;
   }).sort((a,b)=>a.name.localeCompare(b.name,"ar"));
-  const cnt=el("div",{style:"font-size:11px;color:#8A97AD;margin-bottom:6px"},items.length+" من "+S.materials.length+" مادة");
+  const nLow=S.materials.filter(isLow).length,nExp=S.materials.filter(m=>{const d=daysToExp(m);return d!==null&&d<=60;}).length;
+  const cnt=div("","display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px");
+  cnt.appendChild(el("span",{style:"font-size:11px;color:#8A97AD"},items.length+" من "+S.materials.length+" مادة"));
+  const wc=div("","display:flex;gap:5px");
+  const wchip=(t,f)=>{const b=el("button",{class:"warn warn-stock",style:"cursor:pointer"},t);b.onclick=()=>{invFilter=f;render();};wc.appendChild(b);};
+  if(nLow)wchip("⚠️ "+nLow+" منخفضة","low");
+  if(nExp)wchip("⏳ "+nExp+" صلاحية","expiring");
+  cnt.appendChild(wc);
   c.appendChild(cnt);
   if(!items.length){const e=div("empty");e.textContent="لا توجد نتائج";c.appendChild(e);return;}
   items.forEach(m=>{
