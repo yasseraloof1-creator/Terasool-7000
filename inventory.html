@@ -238,7 +238,7 @@ function getStockColor(m){return m.quantity<=0?"#ef4444":isLow(m)?"#f59e0b":"#22
 function getDaysLeft(t){if(!t.lastDone)return null;const n=new Date(t.lastDone+"T00:00:00");if(isNaN(n))return null;n.setDate(n.getDate()+t.intervalDays);const now=new Date();now.setHours(0,0,0,0);return Math.round((n-now)/864e5);}
 function getTaskColor(d){return d===null?"var(--mu)":d<0?"#ef4444":d<=3?"#f59e0b":"#22c55e";}
 function getTaskStatus(d){return d===null?"لم تُنجز بعد":d<0?"متأخر "+Math.abs(d)+" يوم":d===0?"اليوم!":"بعد "+d+" يوم";}
-function iLabel(d){return({1:"كل يوم",7:"كل أسبوع",14:"كل أسبوعين",30:"كل شهر",60:"كل شهرين",90:"كل 3 أشهر",180:"كل 6 أشهر",365:"كل سنة"})[d]||"كل "+d+" يوم";}
+function iLabel(d){return({1:"كل يوم",2:"يوم إي يوم لا (كل يومين)",7:"كل أسبوع",14:"كل أسبوعين",30:"كل شهر",60:"كل شهرين",90:"كل 3 أشهر",180:"كل 6 أشهر",365:"كل سنة"})[d]||"كل "+d+" يوم";}
 /* ===== units ===== */
 function unitInfo(u){u=(u||"").trim();const m=u.match(/^(?:كيس|برميل)\s+(\d+(?:\.\d+)?)\s*(كغ|لتر)$/);if(m)return{b:m[2],f:+m[1]};const t={"كغ":["كغ",1],"غ":["كغ",0.001],"طن":["كغ",1000],"لتر":["لتر",1],"مل":["لتر",0.001]}[u];return t?{b:t[0],f:t[1]}:null;}
 function conv(a,from,to){if(!from||!to||from===to)return a;const x=unitInfo(from),y=unitInfo(to);return(x&&y&&x.b===y.b)?a*x.f/y.f:a;}
@@ -589,7 +589,9 @@ function viewCustomer(id){viewingCustId=id;render();}
 
 function addTask(){
   const name=document.getElementById("tName").value.trim();
-  const days=parseInt(document.getElementById("tDays").value);
+  const dv=document.getElementById("tDays").value;
+  const days=dv==="custom"?parseInt(document.getElementById("tCustom").value):parseInt(dv);
+  if(!(days>=1)){showAlert("اكتب عدد الأيام (رقم من 1 فما فوق)","error");return;}
   const last=document.getElementById("tLast").value;
   if(!name){showAlert("الرجاء كتابة اسم المهمة","error");return;}
   S.tasks.push({id:Date.now().toString(),name,intervalDays:days,lastDone:last||"",remind:parseInt(document.getElementById("tRemind").value)});
@@ -769,7 +771,7 @@ async function swReg(){if(!("serviceWorker" in navigator))return null;try{return
 async function enableNotify(){
   if(typeof Notification==="undefined"){showAlert("المتصفح ما بيدعم الإشعارات","error");return;}
   const p=await Notification.requestPermission();
-  if(p!=="granted"){showAlert("لم يتم السماح بالإشعارات","error");return;}
+  if(p!=="granted"){try{localStorage.setItem("sct-notif-tried","1");}catch(e){}showAlert("لم يتم السماح بالإشعارات. شوف الخطوات تحت","error");render();return;}
   const reg=await swReg();
   if(reg){try{await navigator.serviceWorker.ready;}catch(e){}try{await reg.periodicSync.register("sct-due",{minInterval:12*3600*1000});}catch(e){}}
   await syncMeta();showAlert("تم تفعيل الإشعارات ✅");render();checkDueNow(true);
@@ -1125,14 +1127,21 @@ function rMaint(c){
   const nc=card();nc.style.marginBottom="10px";
   const granted=typeof Notification!=="undefined"&&Notification.permission==="granted";
   nc.innerHTML='<div style="font-weight:700;margin-bottom:4px">🔔 الإشعارات</div><div style="font-size:11.5px;color:var(--mu);line-height:1.6;margin-bottom:8px">'+(granted?"الإشعارات مفعّلة. بتوصلك رسالة لما يقرب موعد الصيانة، وكل ما تفتح التطبيق بيذكّرك.":"فعّل الإشعارات عشان ينبّهك الجوال لما يقرب موعد الصيانة. لتنبيه مضمون 100% استخدم زر «📅 تقويم» بكل موعد.")+'</div>';
+  const tried=typeof Notification!=="undefined"&&Notification.permission==="denied"||localStorage.getItem("sct-notif-tried");
+  if(!granted&&tried){
+    const h=div("","background:var(--sf2);border-radius:10px;padding:10px;font-size:12px;line-height:1.9;margin-bottom:8px");
+    h.innerHTML='<b>الإشعارات محظورة لهالموقع. لفك الحظر:</b><br>1) اضغط ⋮ فوق بالكروم ← الإعدادات ← إعدادات الموقع ← الإشعارات.<br>2) دوّر على <b>yasseraloof1-creator.github.io</b> بقسم «محظور» واضغط عليه واختار <b>السماح</b>.<br>3) ارجع للتطبيق وحدّث الصفحة وجرّب الزر.<br><span style="color:var(--mu)">وإذا مثبّت التطبيق على الشاشة: إعدادات الجوال ← التطبيقات ← «تيراسول» ← الإشعارات ← فعّلها.</span>';
+    nc.appendChild(h);
+  }
   if(!granted){const nb=el("button",{class:"btn"},"🔔 تفعيل إشعارات الجوال");nb.onclick=enableNotify;nc.appendChild(nb);}
   c.appendChild(nc);
-  const iOpts=[1,3,7,14,30,60,90,180,365].map(v=>'<option value="'+v+'"'+(v===14?' selected':'')+'>'+iLabel(v)+'</option>').join('');
+  const iOpts=[1,2,3,7,14,30,60,90,180,365].map(v=>'<option value="'+v+'"'+(v===14?' selected':'')+'>'+iLabel(v)+'</option>').join('')+'<option value="custom">✏️ مدة أخرى (أكتبها أنا)</option>';
   addCard.innerHTML='<div style="font-weight:600;margin-bottom:10px">➕ إضافة موعد جديد</div>'+
     '<label class="lbl">اسم المهمة / المعدة</label><input id="tName" class="inp" placeholder="مثال: تشحيم الخلاطة" style="margin-bottom:10px">'+
     '<div class="grid2" style="margin-bottom:10px">'+
-    '<div><label class="lbl">كل كم يوم؟</label><select id="tDays" class="inp">'+iOpts+'</select></div>'+
+    '<div><label class="lbl">كل كم يوم؟</label><select id="tDays" class="inp" onchange="document.getElementById(\'tCustomBox\').style.display=this.value===\'custom\'?\'block\':\'none\'">'+iOpts+'</select></div>'+
     '<div><label class="lbl">آخر مرة تمت</label><input type="date" id="tLast" class="inp" style="color-scheme:var(--cs)"></div></div>'+
+    '<div id="tCustomBox" style="display:none;margin-bottom:10px"><label class="lbl">كم يوم بالضبط؟ (رقم)</label><input id="tCustom" type="number" min="1" step="1" class="inp" placeholder="مثال: 10"></div>'+
     '<label class="lbl">🔔 نبّهني</label><select id="tRemind" class="inp" style="margin-bottom:10px">'+REM.map(([v,t])=>'<option value="'+v+'"'+(v===1?' selected':'')+'>'+t+'</option>').join('')+'</select>'+
     '<button class="btn" onclick="addTask()">➕ إضافة الموعد</button>';
   c.appendChild(addCard);
