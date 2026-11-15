@@ -354,7 +354,7 @@ function updateFTotal(){
   const tb=document.getElementById("fTotalBox");
   if(tb){tb.style.display=total>0?"flex":"none";const sp=tb.querySelector(".price-total");if(sp)sp.textContent=total.toFixed(2)+" ريال";}
 }
-function perUnitBox(f,tot){const b=div("price-box","margin-top:6px");b.innerHTML='<span class="price-label">📊 التكلفة لكل '+esc(f.yieldUnit||"وحدة")+' (من '+f.yieldQty+')</span><span class="price-total">'+(tot/f.yieldQty).toFixed(2)+' ريال</span>';return b;}
+function perUnitBox(f,tot){const Y=fy(f),b=div("price-box","margin-top:6px");b.innerHTML='<span class="price-label">📊 التكلفة لكل '+esc(Y.unit)+' (من '+Y.qty+')</span><span class="price-total">'+(tot/Y.qty).toFixed(2)+' ريال</span>';return b;}
 function saveFormula(){
   const name=document.getElementById("editName").value.trim();
   if(!name){showAlert("الرجاء كتابة اسم","error");return;}
@@ -393,17 +393,23 @@ function openApplyModal(id){
   applyingId=id;
   const f=S.approvedFormulas.find(f=>f.id===id);
   document.getElementById("applyModalName").textContent=f.name;
-  const yq=f.yieldQty>0;
-  document.getElementById("applyQtyLbl").textContent=yq?"الكمية المطلوبة ("+f.yieldUnit+")":"كم مرة تريد تطبيق الخلطة؟";
-  document.getElementById("applyQtyHint").textContent=yq?"الخلطة الأصلية = "+f.yieldQty+" "+f.yieldUnit+" — المكونات تنحسب تلقائياً":"مثال: 1 = دفعة واحدة";
-  document.getElementById("applyQtyInput").value=yq?f.yieldQty:1;
+  const Y=fy(f),yq=!!Y;
+  document.getElementById("applyQtyLbl").textContent=yq?"كم "+Y.unit+" بدك تعمل من الخلطة؟":"كم مرة تريد تطبيق الخلطة؟";
+  document.getElementById("applyQtyHint").textContent=yq?"إجمالي الخلطة الأصلية = "+Y.qty+" "+Y.unit+(Y.auto?" (محسوب من مجموع المكونات)":"")+" — اكتب الكمية وبتنحسب المكونات":"مثال: 1 = دفعة واحدة";
+  document.getElementById("applyQtyInput").value=yq?Y.qty:1;
   document.getElementById("applySalePrice").value="";
   document.getElementById("applyCustomer").innerHTML=custOptions();
   document.getElementById("applyModal").classList.add("open");
   updateApplyPreview();
 }
 function closeApplyModal(){document.getElementById("applyModal").classList.remove("open");applyingId=null;}
-function applyFactor(f){const v=parseFloat(document.getElementById("applyQtyInput").value)||0;return f.yieldQty>0?v/f.yieldQty:v;}
+function fy(f){
+  if(f.yieldQty>0)return{qty:f.yieldQty,unit:f.yieldUnit||"لتر",auto:false};
+  let sum=0;
+  f.rows.forEach(r=>{const m=S.materials.find(x=>x.id===r.materialId);if(!m)return;const i=unitInfo(rowU(r,m));if(!i)return;sum+=(parseFloat(r.amount)||0)*i.f;});
+  return sum>0?{qty:+sum.toFixed(3),unit:"كغ",auto:true}:null;
+}
+function applyFactor(f){const v=parseFloat(document.getElementById("applyQtyInput").value)||0;const Y=fy(f);return Y?v/Y.qty:v;}
 function updateApplyPreview(){
   const f=S.approvedFormulas.find(f=>f.id===applyingId);if(!f)return;
   const qty=applyFactor(f)||0;
@@ -418,7 +424,7 @@ function updateApplyPreview(){
   document.getElementById("applyModalItems").innerHTML=html;
   const tb=document.getElementById("applyTotalPrice");
   tb.innerHTML=total>0?'<div class="price-box"><span class="price-label">💰 إجمالي التكلفة</span><span class="price-total">'+total.toFixed(2)+' ريال</span></div>':'';
-  if(total>0&&f.yieldQty>0){const v=parseFloat(document.getElementById("applyQtyInput").value)||0;if(v>0)tb.innerHTML+='<div style="font-size:12px;color:var(--mu);text-align:center;margin-top:4px">التكلفة لكل '+esc(f.yieldUnit)+': <b>'+(total/v).toFixed(2)+'</b> ريال</div>';}
+  {const Y=fy(f);if(total>0&&Y){const v=parseFloat(document.getElementById("applyQtyInput").value)||0;if(v>0)tb.innerHTML+='<div style="font-size:12px;color:var(--mu);text-align:center;margin-top:4px">التكلفة لكل '+esc(Y.unit)+': <b>'+(total/v).toFixed(2)+'</b> ريال</div>';}}
   const salePrice=parseFloat(document.getElementById("applySalePrice").value);
   const pb=document.getElementById("applyProfitBox");
   if(!isNaN(salePrice)&&salePrice>0){
@@ -449,7 +455,7 @@ function confirmApply(){
   const custId=document.getElementById("applyCustomer").value;
   const cust=S.customers.find(c=>c.id===custId);
   const salePrice=parseFloat(document.getElementById("applySalePrice").value)||0;
-  const entry={id:Date.now(),date:new Date().toLocaleString("ar-SA"),year:new Date().getFullYear(),name:f.name+(f.yieldQty>0?" ("+(+(qty*f.yieldQty).toFixed(2))+" "+f.yieldUnit+")":(qty!==1?" (×"+(+qty.toFixed(2))+")":"")),items:updates.map(u=>({name:u.name,used:u.used,unit:u.unit})),customerId:custId||null,customerName:cust?cust.name:null,cost:+cost.toFixed(2),salePrice:salePrice,profit:salePrice?+(salePrice-cost).toFixed(2):null};
+  const entry={id:Date.now(),date:new Date().toLocaleString("ar-SA"),year:new Date().getFullYear(),name:f.name+(fy(f)?" ("+(+(qty*fy(f).qty).toFixed(2))+" "+fy(f).unit+")":(qty!==1?" (×"+(+qty.toFixed(2))+")":"")),items:updates.map(u=>({name:u.name,used:u.used,unit:u.unit})),customerId:custId||null,customerName:cust?cust.name:null,cost:+cost.toFixed(2),salePrice:salePrice,profit:salePrice?+(salePrice-cost).toFixed(2):null};
   S.history.unshift(entry);
   if(cust){if(!cust.purchases)cust.purchases=[];cust.purchases.unshift({type:"formula",date:entry.date,name:entry.name,cost:entry.cost,salePrice:entry.salePrice,profit:entry.profit});}
   closeApplyModal();save();showView("inventory");showAlert("تم تطبيق "+f.name+" ✅");
@@ -977,7 +983,7 @@ function rSaved(c){
       nameInp.value=f.name;
       cd.appendChild(nameLabel);cd.appendChild(nameInp);
       const yd=div("","margin-bottom:12px");
-      yd.innerHTML='<label class="lbl">كمية الخلطة الناتجة (اختياري — لحساب تكلفة اللتر أو الكيلو)</label><div class="row"><input id="editYield" type="number" step="any" class="inp" placeholder="مثال: 100" style="flex:1"><select id="editYieldUnit" class="inp" style="flex:1">'+["لتر","كغ","طن","غ","مل"].map(u=>'<option'+(u===(f.yieldUnit||"لتر")?" selected":"")+'>'+u+'</option>').join("")+'</select></div>';
+      yd.innerHTML='<label class="lbl">كمية الخلطة الناتجة (اختياري — إذا تركتها فاضية بتنحسب من مجموع المكونات)</label><div class="row"><input id="editYield" type="number" step="any" class="inp" placeholder="مثال: 100" style="flex:1"><select id="editYieldUnit" class="inp" style="flex:1">'+["لتر","كغ","طن","غ","مل"].map(u=>'<option'+(u===(f.yieldUnit||"لتر")?" selected":"")+'>'+u+'</option>').join("")+'</select></div>';
       yd.querySelector("#editYield").value=f.yieldQty||"";
       cd.appendChild(yd);
       const rowsDiv=div("","");rowsDiv.id="editRows";
@@ -1004,7 +1010,7 @@ function rSaved(c){
         bd.appendChild(rd);
       });
       const tot=fTotal(f.rows);
-      if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';bd.appendChild(pb);if(f.yieldQty>0)bd.appendChild(perUnitBox(f,tot));}
+      if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';bd.appendChild(pb);if(fy(f))bd.appendChild(perUnitBox(f,tot));}
       const btnRow=div("row","margin-top:10px");
       const editBtn=el("button",{class:"btn btn-ghost",style:"flex:1;font-size:13px"},"✏️ تعديل");editBtn.onclick=()=>startEditFormula(f.id);
       const appBtn=el("button",{class:"btn btn-green",style:"flex:2;font-size:13px"},"✅ اعتماد الخلطة");appBtn.onclick=()=>approveFormula(f.id);
@@ -1037,7 +1043,7 @@ function rApproved(c){
       bd.appendChild(rd);
     });
     const tot=fTotal(f.rows);
-    if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';bd.appendChild(pb);if(f.yieldQty>0)bd.appendChild(perUnitBox(f,tot));}
+    if(tot>0){const pb=div("price-box","margin-top:8px");pb.innerHTML='<span class="price-label">💰 تكلفة الخلطة</span><span class="price-total">'+tot.toFixed(2)+' ريال</span>';bd.appendChild(pb);if(fy(f))bd.appendChild(perUnitBox(f,tot));}
     const btnRow=div("row","margin-top:10px");
     const applyBtn=el("button",{class:"btn",style:"flex:3;font-size:13px"},"🧪 تطبيق وخصم المخزون");applyBtn.onclick=()=>openApplyModal(f.id);
     const editBtn=el("button",{class:"btn btn-ghost",style:"flex:2;font-size:12px"},"✏️ إرجاع للتعديل");editBtn.onclick=()=>moveToEdit(f.id);
