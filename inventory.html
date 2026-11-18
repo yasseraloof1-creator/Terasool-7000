@@ -173,6 +173,11 @@ h2{font-size:16px;font-weight:700;margin-bottom:8px}
   <div id="pFileList" style="margin-bottom:12px"></div>
   <div class="row"><button class="btn btn-ghost" style="flex:1" onclick="cancelProj()">إلغاء</button><button class="btn" style="flex:2" onclick="saveProj()">💾 حفظ</button></div>
 </div></div>
+<div class="modal-overlay" id="catModal"><div class="modal">
+  <h3 style="margin-bottom:12px" id="catTitle">🗂️ تصنيف جديد</h3>
+  <label class="lbl">اسم التصنيف</label><input id="catName" class="inp" placeholder="مثال: دهانات داخلية" style="margin-bottom:12px">
+  <div class="row"><button class="btn btn-ghost" style="flex:1" onclick="closeCatModal()">إلغاء</button><button class="btn" style="flex:2" onclick="saveCat()">💾 حفظ</button></div>
+</div></div>
 <div class="modal-overlay" id="vchModal"><div class="modal">
   <h3 style="margin-bottom:12px" id="vchTitle">🧾 سند قبض</h3>
   <div class="grid2" style="margin-bottom:8px"><div><label class="lbl">العميل</label><select id="vCust" class="inp" onchange="fillVchProj()"></select></div>
@@ -217,11 +222,11 @@ h2{font-size:16px;font-weight:700;margin-bottom:8px}
 <script>
 
 const SK="paint_factory_v2";
-let S={materials:[],history:[],savedFormulas:[],approvedFormulas:[],tasks:[],archivedHistory:{},customers:[],sales:[],projects:[],vouchers:[]};
+let S={materials:[],history:[],savedFormulas:[],approvedFormulas:[],tasks:[],archivedHistory:{},customers:[],sales:[],projects:[],vouchers:[],formulaCats:[]};
 let currentView="home",applyingId=null,editingMatId=null,editingFormulaId=null;
 
 function save(){try{syncMeta();}catch(e){}try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){showAlert("تعذّر حفظ البيانات على هذا الجهاز! صدّر نسخة احتياطية الآن","error");}updateWarnings();}
-function load(){try{const s=localStorage.getItem(SK);if(s){const p=JSON.parse(s);S={materials:p.materials||[],history:p.history||[],savedFormulas:p.savedFormulas||[],approvedFormulas:p.approvedFormulas||[],tasks:p.tasks||[],archivedHistory:p.archivedHistory||{},customers:p.customers||[],sales:p.sales||[],projects:p.projects||[],vouchers:p.vouchers||[]};migrateOldEntries();}}catch(e){}}
+function load(){try{const s=localStorage.getItem(SK);if(s){const p=JSON.parse(s);S={materials:p.materials||[],history:p.history||[],savedFormulas:p.savedFormulas||[],approvedFormulas:p.approvedFormulas||[],tasks:p.tasks||[],archivedHistory:p.archivedHistory||{},customers:p.customers||[],sales:p.sales||[],projects:p.projects||[],vouchers:p.vouchers||[],formulaCats:p.formulaCats||[]};migrateOldEntries();}}catch(e){}}
 
 let aT;
 function showAlert(msg,type){const el=document.getElementById("alertBox");el.textContent=msg;el.style.background=type==="error"?"#ef4444":"#22c55e";el.style.display="block";clearTimeout(aT);aT=setTimeout(()=>el.style.display="none",3000);}
@@ -248,7 +253,7 @@ function showView(v,np){
 }
 window.addEventListener("popstate",e=>{navDepth=Math.max(0,navDepth-1);showView((e.state&&e.state.v)||"home",true);});
 try{history.replaceState({v:"home"},"");}catch(e){}
-const VT={home:"الرئيسية",inventory:"المخزون",addMaterial:"إضافة مواد",savedFormulas:"الخلطات",approvedFormulas:"الخلطات المعتمدة",history:"سجل الخلطات",maintenance:"المواعيد",sales:"المبيعات",customers:"العملاء",projects:"المشاريع",receipts:"سندات القبض",payments:"سندات الصرف",more:"المزيد"};
+const VT={home:"الرئيسية",inventory:"المخزون",addMaterial:"إضافة مواد",savedFormulas:"الخلطات",approvedFormulas:"الخلطات المعتمدة",history:"سجل الخلطات",maintenance:"المواعيد",sales:"المبيعات",customers:"العملاء",projects:"المشاريع",receipts:"سندات القبض",formulaCat:"تصنيف الخلطات",payments:"سندات الصرف",more:"المزيد"};
 function updChrome(){
   const bb=document.getElementById("backBtn");if(bb)bb.style.display=currentView==="home"?"none":"flex";
   const h=document.getElementById("hsub");if(h)h.textContent=currentView==="home"?"إدارة المخزون والخلطات":(VT[currentView]||"");
@@ -300,7 +305,7 @@ function importData(e){
       const p=JSON.parse(ev.target.result);
       if(!Array.isArray(p.materials)){showAlert("ملف غير صحيح","error");return;}
       if(!confirm("سيتم استبدال كل البيانات الحالية ببيانات الملف. هل تريد المتابعة؟"))return;
-      S={materials:p.materials||[],history:p.history||[],savedFormulas:p.savedFormulas||[],approvedFormulas:p.approvedFormulas||[],tasks:p.tasks||[],archivedHistory:p.archivedHistory||{},customers:p.customers||[],sales:p.sales||[],projects:p.projects||[],vouchers:p.vouchers||[]};
+      S={materials:p.materials||[],history:p.history||[],savedFormulas:p.savedFormulas||[],approvedFormulas:p.approvedFormulas||[],tasks:p.tasks||[],archivedHistory:p.archivedHistory||{},customers:p.customers||[],sales:p.sales||[],projects:p.projects||[],vouchers:p.vouchers||[],formulaCats:p.formulaCats||[]};
       if(p.fileData){for(const id in p.fileData){try{const b=await (await fetch(p.fileData[id])).blob();await putFile(id,b);}catch(e){}}}
       migrateOldEntries();save();render();showAlert("تم الاستيراد ✅");
     }catch{showAlert("خطأ في الملف","error");}
@@ -398,7 +403,7 @@ function saveFormula(){
   });
   if(!ok||!rows.length){showAlert("الرجاء اكمال جميع المواد","error");return;}
   const yieldQty=parseFloat(document.getElementById("editYield").value)||0,yieldUnit=document.getElementById("editYieldUnit").value;
-  S.savedFormulas=S.savedFormulas.map(f=>f.id===editingFormulaId?{...f,name,rows,yieldQty,yieldUnit,notes:(document.getElementById("editNotes")||{value:""}).value.trim(),files:FC.frm.tmp.slice()}:f);
+  S.savedFormulas=S.savedFormulas.map(f=>f.id===editingFormulaId?{...f,name,rows,yieldQty,yieldUnit,cat:(document.getElementById("editCat")||{value:""}).value,notes:(document.getElementById("editNotes")||{value:""}).value.trim(),files:FC.frm.tmp.slice()}:f);
   finishFiles("frm");FC.frm.fid=null;editingFormulaId=null;save();render();showAlert("تم حفظ الخلطة ✅");
 }
 function approveFormula(id){
@@ -1185,7 +1190,7 @@ async function reportFormula(id){
   const tot=fTotal(f.rows),Y=fy(f);
   const apps=S.history.filter(h=>h.formulaId===f.id||(!h.formulaId&&(h.name===f.name||h.name.indexOf(f.name+" (")===0))).sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0));
   const cost=sumBy(apps,h=>h.cost),rev=sumBy(apps,h=>h.salePrice),prof=sumBy(apps,h=>h.profit);
-  r.kv([["الخلطة",f.name],["تاريخ الاعتماد",f.approvedAt||"—"],["كمية الخلطة الأصلية",Y?Y.qty+" "+Y.unit+(Y.auto?" (محسوبة من المكونات)":""):"—"],["تكلفة الخلطة الأصلية",tot>0?fm(tot)+" ريال":"—"],["التكلفة لكل "+(Y?Y.unit:"وحدة"),Y&&tot>0?fm(tot/Y.qty)+" ريال":"—"],["عدد المكونات",String(f.rows.length)]]);
+  r.kv([["الخلطة",f.name],["تاريخ الاعتماد",f.approvedAt||"—"],["كمية الخلطة الأصلية",Y?Y.qty+" "+Y.unit+(Y.auto?" (محسوبة من المكونات)":""):"—"],["تكلفة الخلطة الأصلية",tot>0?fm(tot)+" ريال":"—"],["التكلفة لكل "+(Y?Y.unit:"وحدة"),Y&&tot>0?fm(tot/Y.qty)+" ريال":"—"],["عدد المكونات",String(f.rows.length)],["التصنيف",(S.formulaCats.find(x=>x.id===f.cat)||{name:"غير مصنّف"}).name]]);
   if((f.files||[]).length)r.kv([["الملفات المرفقة",f.files.map(x=>x.name).join("، ")]]);
   if(f.notes){r.section("ملاحظات الخلطة");r.note(f.notes,19,RP.ink);}
   r.stats([[apps.length,"مرة تطبيق"],[fm(cost),"إجمالي التكلفة (ريال)"],[fm(rev),"إجمالي المبيعات (ريال)"],[fm(prof),"الأرباح (ريال)"]]);
@@ -1231,10 +1236,62 @@ async function reportProject(id){
   doneReport(r,"تقرير-مشروع-"+p.name);
 }
 
+/* ===== categories for approved formulas ===== */
+let viewingCat=null,catEditId=null,catAssign=null;
+const catExists=id=>!!id&&S.formulaCats.some(c=>c.id===id);
+const catCount=id=>S.approvedFormulas.filter(f=>id==="none"?!catExists(f.cat):f.cat===id).length;
+function catOptions(sel){return '<option value="">غير مصنّف</option>'+S.formulaCats.map(c=>'<option value="'+c.id+'"'+(c.id===sel?' selected':'')+'>'+esc(c.name)+'</option>').join("")+'<option value="__new">➕ تصنيف جديد...</option>';}
+function setFormulaCat(fid,v){
+  if(v==="__new"){openCatModal(null,fid);render();return;}
+  const f=S.approvedFormulas.find(x=>x.id===fid);if(!f)return;f.cat=v;save();render();showAlert("تم نقل الخلطة للتصنيف ✅");
+}
+function openCatModal(id,assignFid){
+  catEditId=id||null;catAssign=assignFid||null;const c=id?S.formulaCats.find(x=>x.id===id):null;
+  document.getElementById("catTitle").textContent=c?"✏️ تعديل التصنيف":"🗂️ تصنيف جديد";
+  document.getElementById("catName").value=c?c.name:"";document.getElementById("catModal").classList.add("open");
+  setTimeout(()=>{try{document.getElementById("catName").focus();}catch(e){}},50);
+}
+function closeCatModal(){document.getElementById("catModal").classList.remove("open");catAssign=null;catEditId=null;}
+function saveCat(){
+  const name=document.getElementById("catName").value.trim();if(!name){showAlert("اكتب اسم التصنيف","error");return;}
+  if(S.formulaCats.some(c=>c.name===name&&c.id!==catEditId)){showAlert("هذا التصنيف موجود مسبقاً","error");return;}
+  if(catEditId){S.formulaCats=S.formulaCats.map(c=>c.id===catEditId?{...c,name}:c);}
+  else{const nc={id:"fc"+Date.now().toString(36),name};S.formulaCats.push(nc);if(catAssign){const f=S.approvedFormulas.find(x=>x.id===catAssign);if(f)f.cat=nc.id;}}
+  closeCatModal();save();render();showAlert("تم حفظ التصنيف ✅");
+}
+function deleteCat(id){
+  const c=S.formulaCats.find(x=>x.id===id);if(!c)return;const n=catCount(id);
+  if(!confirm("حذف التصنيف «"+c.name+"»؟"+(n?"\nالخلطات اللي فيه ("+n+") رح تصير غير مصنّفة، وما بتنحذف.":"")))return;
+  S.approvedFormulas.forEach(f=>{if(f.cat===id)f.cat="";});S.savedFormulas.forEach(f=>{if(f.cat===id)f.cat="";});
+  S.formulaCats=S.formulaCats.filter(x=>x.id!==id);save();render();showAlert("تم حذف التصنيف","error");
+}
+function openCat(id){viewingCat=id;showView("formulaCat");}
+function rApproved(c){
+  const top=div("section-title");top.appendChild(el("h2",{style:"margin:0"},"✅ الخلطات المعتمدة"));
+  const nb=el("button",{class:"btn",style:"width:auto;padding:8px 14px"},"+ تصنيف");nb.onclick=()=>openCatModal();top.appendChild(nb);c.appendChild(top);
+  c.appendChild(el("p",{style:"color:var(--mu);font-size:12.5px;margin-bottom:10px;line-height:1.7"},"صنّف خلطاتك بمجموعات (مثل: دهانات داخلية، دهانات خارجية). اضغط على تصنيف لتشوف خلطاته."));
+  const row=(icon,title,n,fn,acts)=>{
+    const r=div("mrow");r.innerHTML='<span class="mi" style="font-size:18px">'+icon+'</span><span style="flex:1;text-align:right"><b>'+esc(title)+'</b><small>'+n+' خلطة</small></span>';
+    (acts||[]).forEach(([t,f,cls])=>{const b=el("button",{class:"sb"+(cls?" "+cls:""),style:"flex:0 0 38px;padding:7px 0"},t);b.onclick=ev=>{ev.stopPropagation();f();};r.appendChild(b);});
+    r.appendChild(el("span",{style:"color:var(--mu)"},"‹"));r.onclick=fn;c.appendChild(r);
+  };
+  row("📋","كل الخلطات المعتمدة",S.approvedFormulas.length,()=>openCat("all"));
+  S.formulaCats.forEach(ct=>row("🗂️",ct.name,catCount(ct.id),()=>openCat(ct.id),[["✏️",()=>openCatModal(ct.id)],["🗑️",()=>deleteCat(ct.id),"d"]]));
+  const nn=catCount("none");if(nn>0)row("📦","غير مصنّف",nn,()=>openCat("none"));
+  if(!S.approvedFormulas.length){const e=div("empty");e.innerHTML='<div style="font-size:34px;margin-bottom:8px">✅</div><div>لا توجد خلطات معتمدة بعد. اعتمد خلطة من تبويب الخلطات.</div>';c.appendChild(e);}
+}
+function rFormulaCat(c){
+  const ct=S.formulaCats.find(x=>x.id===viewingCat);
+  if(viewingCat!=="all"&&viewingCat!=="none"&&!ct){currentView="approvedFormulas";rApproved(c);return;}
+  const list=viewingCat==="all"?S.approvedFormulas:viewingCat==="none"?S.approvedFormulas.filter(f=>!catExists(f.cat)):S.approvedFormulas.filter(f=>f.cat===viewingCat);
+  const title=viewingCat==="all"?"📋 كل الخلطات المعتمدة":viewingCat==="none"?"📦 غير مصنّف":"🗂️ "+ct.name;
+  rApprovedList(c,list,title,list.length+" خلطة — جاهزة للتطبيق مباشرة على المخزون");
+}
+
 function render(){
   const c=document.getElementById("mainContent");
   if(!c)return;
-  const fns={receipts:rReceipts,payments:rPayments,home:rHome,more:rMore,projects:rProjects,inventory:rInv,addMaterial:rAdd,savedFormulas:rSaved,approvedFormulas:rApproved,history:rHistory,maintenance:rMaint,sales:rSales,customers:rCustomers};
+  const fns={formulaCat:rFormulaCat,receipts:rReceipts,payments:rPayments,home:rHome,more:rMore,projects:rProjects,inventory:rInv,addMaterial:rAdd,savedFormulas:rSaved,approvedFormulas:rApproved,history:rHistory,maintenance:rMaint,sales:rSales,customers:rCustomers};
   const fn=fns[currentView]||rInv;
   c.innerHTML="";
   fn(c);
@@ -1433,6 +1490,9 @@ function rSaved(c){
       yd.innerHTML='<label class="lbl">كمية الخلطة الناتجة (اختياري — إذا تركتها فاضية بتنحسب من مجموع المكونات)</label><div class="row"><input id="editYield" type="number" step="any" class="inp" placeholder="مثال: 100" style="flex:1"><select id="editYieldUnit" class="inp" style="flex:1">'+["لتر","كغ","طن","غ","مل"].map(u=>'<option'+(u===(f.yieldUnit||"لتر")?" selected":"")+'>'+u+'</option>').join("")+'</select></div>';
       yd.querySelector("#editYield").value=f.yieldQty||"";
       cd.appendChild(yd);
+      const cg=div("","margin-bottom:12px");
+      cg.innerHTML='<label class="lbl">🗂️ التصنيف (للخلطة بعد الاعتماد)</label><select id="editCat" class="inp"><option value="">غير مصنّف</option>'+S.formulaCats.map(x=>'<option value="'+x.id+'"'+(x.id===f.cat?' selected':'')+'>'+esc(x.name)+'</option>').join("")+'</select>';
+      cd.appendChild(cg);
       if(FC.frm.fid!==f.id){FC.frm.fid=f.id;FC.frm.tmp=(f.files||[]).slice();FC.frm.added=[];FC.frm.removed=[];}
       const nt=div("","margin-bottom:12px");
       nt.innerHTML='<label class="lbl">📝 ملاحظات الخلطة</label><textarea id="editNotes" class="inp" rows="3" placeholder="مثال: ترتيب الخلط، سرعة الخلاط، تنبيهات..." style="resize:vertical"></textarea>';
@@ -1478,15 +1538,15 @@ function rSaved(c){
   });
 }
 
-function rApproved(c){
+function rApprovedList(c,list,title,subtitle){
   foldReg={};
-  const h=el("h2",{},"✅ الخلطات الثابتة المعتمدة");c.appendChild(h);
-  const sub=el("p",{style:"color:var(--mu);font-size:13px;margin-bottom:14px"},"جاهزة للتطبيق مباشرة على المخزون");c.appendChild(sub);
-  if(!S.approvedFormulas.length){
-    const empty=div("empty");empty.innerHTML='<div style="font-size:40px;margin-bottom:10px">✅</div><div>لا يوجد خلطات معتمدة بعد</div>';
+  const h=el("h2",{},title);c.appendChild(h);
+  const sub=el("p",{style:"color:var(--mu);font-size:13px;margin-bottom:14px"},subtitle);c.appendChild(sub);
+  if(!list.length){
+    const empty=div("empty");empty.innerHTML='<div style="font-size:40px;margin-bottom:10px">✅</div><div>لا يوجد خلطات هنا بعد</div>';
     c.appendChild(empty);return;
   }
-  S.approvedFormulas.forEach(f=>{
+  list.forEach(f=>{
     const cd=div("card card-green");
     const tot0=fTotal(f.rows);
     const quick=el("button",{class:"sb p",style:"flex:0 0 auto;padding:6px 10px"},"🧪 تطبيق");
@@ -1506,6 +1566,8 @@ function rApproved(c){
     const delBtn=el("button",{class:"btn-danger"},"🗑️");delBtn.onclick=()=>deleteApproved(f.id);
     btnRow.appendChild(applyBtn);btnRow.appendChild(editBtn);btnRow.appendChild(delBtn);
     formulaExtras(f,bd);
+    const cs=div("","margin-top:8px");cs.innerHTML='<label class="lbl">🗂️ التصنيف</label>';
+    const csel=el("select",{class:"inp"});csel.innerHTML=catOptions(f.cat);csel.onchange=()=>setFormulaCat(f.id,csel.value);cs.appendChild(csel);bd.appendChild(cs);
     bd.appendChild(btnRow);
     const rpf=el("button",{class:"sb",style:"width:100%;margin-top:6px"},"📄 تقرير PDF للخلطة");rpf.onclick=()=>reportFormula(f.id);bd.appendChild(rpf);
     c.appendChild(cd);
