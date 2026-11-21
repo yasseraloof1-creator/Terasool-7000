@@ -1445,6 +1445,8 @@ QDoc.prototype.wrap=function(text,maxW,sz,b){
 };
 QDoc.prototype.flow=function(cells,o){
   const lh=o.lh,pad=o.pad;let off=0;const n=Math.max(1,...cells.map(c=>c.lines.length));
+  // keep=true: لو الصف ما كفى بباقي الصفحة وبيكفي بصفحة كاملة، انقله كله للصفحة التالية
+  if(o.keep){const tot=n*lh+2*pad;if(this.y+tot>this.limit&&tot<=this.limit-480){this.newPage();if(o.head)o.head();}}
   while(off<n){
     const avail=Math.floor((this.limit-this.y-2*pad)/lh);
     if(avail<1||(avail<2&&n-off>1)){this.newPage();if(o.head)o.head();continue;}
@@ -1493,7 +1495,7 @@ function qDocBuild(q,logo){
   q.items.forEach((it,i)=>{
     const cells=[];const add=(k,val,al,b,num)=>{if(!W[k])return;let sz=20;if(num){d.f(sz,b);while(d.x.measureText(val).width>W[k]-20&&sz>13){sz--;d.f(sz,b);}}cells.push({x:xs[k],w:W[k],al:al,b:b,sz:sz,lines:d.wrap(val,W[k]-(num?10:24),sz,b)});};
     add(0,String(i+1),"c");add(1,it.code||"","c");add(2,it.name||"",null,true);add(3,it.desc||"",null);add(4,it.unit||"","c");add(5,qn(it.qty),"c",false,true);add(6,it.price===""?"":qm(it.price),"c",false,true);add(7,qm(cc.lines[i]),"c",true,true);
-    d.flow(cells,{lh:30,pad:12,head});
+    d.flow(cells,{lh:30,pad:12,head,keep:true});
   });
   d.y+=34;
   // totals (kept together)
@@ -1505,10 +1507,12 @@ function qDocBuild(q,logo){
   rows.forEach(r=>{const bg=r[2]?QC.tot2:QC.tot,sg=r[1]<0?"- ":"";d.flow([{x:620,w:545,bg,al:"right",b:r[2],lines:[{t:r[0],dir:"rtl",sz:21}]},{x:75,w:545,bg,al:"c",b:true,lines:[{t:sg+qm(Math.abs(r[1]))+" ريال سعودي",dir:"rtl",sz:r[2]?23:21}]}],{lh:30,pad:11});});
   d.y+=34;
   // remarks
-  d.need(180);
-  d.flow([{x:75,w:1090,bg:QC.lbl,al:"right",lines:[{t:"ملاحظات / Remarks",dir:"rtl",b:true,sz:21}]}],{lh:30,pad:10});
   const nl=(q.notes||"").trim()?d.wrap(q.notes,1090-30,20,false):[{t:"",dir:"rtl"}];
-  d.flow([{x:75,w:1090,al:null,lines:nl.length<2?nl.concat([{t:"",dir:"rtl"}]):nl}],{lh:31,pad:14});
+  const nl2=nl.length<2?nl.concat([{t:"",dir:"rtl"}]):nl;
+  const remH=50+nl2.length*31+28;
+  if(remH<=d.limit-480){d.need(remH);}else{d.need(180);}
+  d.flow([{x:75,w:1090,bg:QC.lbl,al:"right",lines:[{t:"ملاحظات / Remarks",dir:"rtl",b:true,sz:21}]}],{lh:30,pad:10});
+  d.flow([{x:75,w:1090,al:null,lines:nl2}],{lh:31,pad:14,keep:true});
   d.y+=40;
   // signatures (kept together)
   d.need(155);
