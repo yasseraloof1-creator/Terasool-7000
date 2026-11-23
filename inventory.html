@@ -260,7 +260,7 @@ function showView(v,np){
 }
 window.addEventListener("popstate",e=>{navDepth=Math.max(0,navDepth-1);showView((e.state&&e.state.v)||"home",true);});
 try{history.replaceState({v:"home"},"");}catch(e){}
-const VT={home:"الرئيسية",inventory:"المخزون",addMaterial:"إضافة مواد",savedFormulas:"الخلطات",approvedFormulas:"الخلطات المعتمدة",history:"سجل الخلطات",maintenance:"المواعيد",sales:"المبيعات",customers:"العملاء",projects:"المشاريع",receipts:"سندات القبض",formulaCat:"تصنيف الخلطات",quotes:"عروض الأسعار",quoteForm:"عرض سعر",payments:"سندات الصرف",more:"المزيد"};
+const VT={home:"الرئيسية",inventory:"المخزون",addMaterial:"إضافة مواد",savedFormulas:"الخلطات",approvedFormulas:"الخلطات المعتمدة",history:"سجل الخلطات",maintenance:"المواعيد",sales:"المبيعات",customers:"العملاء",projects:"المشاريع",receipts:"سندات القبض",formulaCat:"تصنيف الخلطات",quotes:"عروض الأسعار و PI",quoteForm:"عرض سعر / PI",payments:"سندات الصرف",more:"المزيد"};
 function updChrome(){
   const bb=document.getElementById("backBtn");if(bb)bb.style.display=currentView==="home"?"none":"flex";
   const h=document.getElementById("hsub");if(h)h.textContent=currentView==="home"?"إدارة المخزون والخلطات":(VT[currentView]||"");
@@ -702,7 +702,7 @@ function rMore(c){
   const b=el("button",{class:"mrow"});
   b.innerHTML='<span class="mi">'+ico("users",20)+'</span><span style="flex:1;text-align:right"><b>العملاء</b><small>بيانات العملاء وملفاتهم وسجل مشترياتهم</small></span><span style="color:var(--mu)">‹</span>';
   b.onclick=()=>showView("customers");c.appendChild(b);
-  (()=>{const r=el("button",{class:"mrow"});r.innerHTML='<span class="mi">'+ico("doc",20)+'</span><span style="flex:1;text-align:right"><b>عروض الأسعار</b><small>إنشاء عرض سعر PDF بقالب المؤسسة</small></span>'+(S.quotes.length?'<span class="tag t-gy">'+S.quotes.length+'</span>':'')+'<span style="color:var(--mu)">‹</span>';r.onclick=()=>showView("quotes");c.appendChild(r);})();
+  (()=>{const r=el("button",{class:"mrow"});r.innerHTML='<span class="mi">'+ico("doc",20)+'</span><span style="flex:1;text-align:right"><b>عروض الأسعار و PI</b><small>إنشاء عرض سعر أو فاتورة PI بقالب المؤسسة</small></span>'+(S.quotes.length?'<span class="tag t-gy">'+S.quotes.length+'</span>':'')+'<span style="color:var(--mu)">‹</span>';r.onclick=()=>showView("quotes");c.appendChild(r);})();
   [["recv","سندات القبض","مبالغ استلمتها من العملاء","receipts","in"],["pay","سندات الصرف","مبالغ دفعتها للعملاء","payments","out"]].forEach(([ic,t,sub,v,ty])=>{
     const n=S.vouchers.filter(x=>x.type===ty&&!x.booked).length;
     const r=el("button",{class:"mrow"});
@@ -1331,24 +1331,26 @@ function qCalc(q){
   const dv=+q.discVal||0,disc=Math.min(sub,r2(q.discType==="pct"?sub*dv/100:dv)),base=r2(sub-disc),rate=q.taxOn===false?0:(q.taxRate===""||q.taxRate==null?15:+q.taxRate),tax=Math.round(base*rate)/100;
   return{lines,sub,disc,base,rate,tax:r2(tax),total:r2(base+tax)};
 }
-function newQuote(){return{no:"",custId:"",custName:"",custTax:"",issue:todayStr(),due:"",items:[{code:"",name:"",desc:"",unit:"",qty:"",price:""}],discType:"amt",discVal:"",taxOn:true,taxRate:15,notes:"",issuer:"خالد"};}
-function openQuoteForm(id){qEditId=id||null;const q=id?S.quotes.find(x=>x.id===id):null;qDraft=q?JSON.parse(JSON.stringify(q)):newQuote();showView("quoteForm");}
+const qIsPI=q=>q&&q.type==="pi";const qLbl=q=>qIsPI(q)?"فاتورة PI":"عرض سعر";
+function newQuote(t){return{type:t==="pi"?"pi":"quote",no:"",custId:"",custName:"",custTax:"",issue:todayStr(),due:"",items:[{code:"",name:"",desc:"",unit:"",qty:"",price:""}],discType:"amt",discVal:"",taxOn:true,taxRate:15,notes:"",issuer:"خالد"};}
+function openQuoteForm(id,t){qEditId=id||null;const q=id?S.quotes.find(x=>x.id===id):null;qDraft=q?JSON.parse(JSON.stringify(q)):newQuote(t);showView("quoteForm");}
 function dupQuote(id){const q=S.quotes.find(x=>x.id===id);if(!q)return;const c=JSON.parse(JSON.stringify(q));c.id="q"+Date.now().toString(36);c.no="";c.issue=todayStr();c.due="";c.created=Date.now();S.quotes.unshift(c);save();render();showAlert("تم نسخ العرض. افتحه وعدّل رقمه وتاريخه");}
 function delQuote(id){const q=S.quotes.find(x=>x.id===id);if(!q||!confirm("حذف عرض السعر "+(q.no?"رقم "+q.no+" ":"")+"للعميل "+q.custName+"؟"))return;S.quotes=S.quotes.filter(x=>x.id!==id);save();render();showAlert("تم حذف العرض","error");}
 function rQuotes(c){
-  const top=div("section-title");top.appendChild(el("h2",{style:"margin:0"},"📄 عروض الأسعار"));
-  const nb=el("button",{class:"btn",style:"width:auto;padding:8px 14px"},"+ عرض جديد");nb.onclick=()=>openQuoteForm();top.appendChild(nb);c.appendChild(top);
-  c.appendChild(el("p",{style:"color:var(--mu);font-size:12.5px;margin-bottom:10px;line-height:1.7"},"كل العروض بتنحفظ هون. افتح أي عرض لتعدّله أو تطلّع الـ PDF تبعه من جديد."));
-  if(!S.quotes.length){const e=div("empty");e.innerHTML='<div style="font-size:34px;margin-bottom:8px">📄</div><div>لا توجد عروض بعد. اضغط «+ عرض جديد».</div>';c.appendChild(e);return;}
+  const top=div("section-title");top.appendChild(el("h2",{style:"margin:0"},"📄 عروض الأسعار و PI"));
+  const nbw=div("row","gap:6px");const nb=el("button",{class:"btn",style:"width:auto;padding:8px 12px"},"+ عرض سعر");nb.onclick=()=>openQuoteForm(null,"quote");
+  const nb2=el("button",{class:"btn btn-green",style:"width:auto;padding:8px 12px"},"+ PI");nb2.onclick=()=>openQuoteForm(null,"pi");nbw.appendChild(nb);nbw.appendChild(nb2);top.appendChild(nbw);c.appendChild(top);
+  c.appendChild(el("p",{style:"color:var(--mu);font-size:12.5px;margin-bottom:10px;line-height:1.7"},"كل العروض وفواتير الـ PI بتنحفظ هون. افتح أي مستند لتعدّله أو تطلّع الـ PDF تبعه من جديد."));
+  if(!S.quotes.length){const e=div("empty");e.innerHTML='<div style="font-size:34px;margin-bottom:8px">📄</div><div>لا توجد مستندات بعد. اضغط «+ عرض سعر» أو «+ PI».</div>';c.appendChild(e);return;}
   foldReg={};
   S.quotes.slice().sort((a,b)=>(b.created||0)-(a.created||0)).forEach(q=>{
     const cd=card(),cc=qCalc(q);
     const tg=el("span",{class:"tag t-gy",style:"flex-shrink:0"},q.issue?fmtD(q.issue):"");
-    const body=foldHead(cd,"q"+q.id,'<div style="font-weight:700;font-size:14px">'+esc(q.custName||"بدون عميل")+'</div><div style="font-size:11px;color:var(--mu);margin-top:1px">'+(q.no?"عرض رقم "+esc(q.no):"بدون رقم")+' · '+(q.items||[]).length+' بند</div>',qm(cc.total)+" ر",tg);
+    const body=foldHead(cd,"q"+q.id,'<div style="font-weight:700;font-size:14px">'+esc(q.custName||"بدون عميل")+'</div><div style="font-size:11px;color:var(--mu);margin-top:1px">'+(qIsPI(q)?"🧾 PI":"📄 عرض")+(q.no?" رقم "+esc(q.no):" · بدون رقم")+' · '+(q.items||[]).length+' بند</div>',qm(cc.total)+" ر",tg);
     const d=div("","margin-top:8px;font-size:12.5px;line-height:1.9");
     d.innerHTML='<div>📅 الإصدار: '+(q.issue?fmtD(q.issue):"—")+' · الاستحقاق: '+(q.due?fmtD(q.due):"—")+'</div><div>💰 المجموع الفرعي: '+qm(cc.sub)+(cc.disc?' · الخصم: '+qm(cc.disc):'')+' · الضريبة: '+qm(cc.tax)+'</div>'+(q.notes?'<div style="color:var(--mu);white-space:pre-wrap">📝 '+esc(q.notes.length>140?q.notes.slice(0,140)+"…":q.notes)+'</div>':'');
     body.appendChild(d);
-    const pb=el("button",{class:"btn",style:"margin-top:8px"},"📄 طلّع عرض السعر PDF");pb.onclick=()=>pdfQuote(q.id);body.appendChild(pb);
+    const pb=el("button",{class:"btn",style:"margin-top:8px"},"📄 طلّع "+qLbl(q)+" PDF");pb.onclick=()=>pdfQuote(q.id);body.appendChild(pb);
     const row=div("row","margin-top:8px");
     const e1=el("button",{class:"sb"},"✏️ تعديل");e1.onclick=()=>openQuoteForm(q.id);
     const c1=el("button",{class:"sb"},"📋 نسخ");c1.onclick=()=>dupQuote(q.id);
@@ -1358,7 +1360,8 @@ function rQuotes(c){
 }
 function rQuoteForm(c){
   if(!qDraft)qDraft=newQuote();const q=qDraft;
-  c.appendChild(el("h2",{style:"margin-bottom:10px"},qEditId?"✏️ تعديل عرض سعر":"📄 عرض سعر جديد"));
+  c.appendChild(el("h2",{style:"margin-bottom:10px"},qEditId?"✏️ تعديل "+qLbl(q):"📄 "+qLbl(q)+" جديد"));
+  {const tw=div("row","gap:6px;margin-bottom:10px");[["quote","📄 عرض سعر"],["pi","🧾 فاتورة PI"]].forEach(([k,t])=>{const on=(q.type||"quote")===k;const b=el("button",{class:on?"btn":"btn btn-ghost",style:"flex:1;padding:9px 6px"},t);b.onclick=()=>{q.type=k;render();};tw.appendChild(b);});c.appendChild(tw);}
   let totBox;const upd=()=>{const cc=qCalc(q);q.items.forEach((it,i)=>{const sp=document.getElementById("qln"+i);if(sp)sp.textContent=qm(cc.lines[i]);});
     if(totBox)totBox.innerHTML='<div class="row" style="justify-content:space-between"><span>المجموع الفرعي</span><b>'+qm(cc.sub)+'</b></div>'+(cc.disc?'<div class="row" style="justify-content:space-between"><span>الخصم (قبل الضريبة)</span><b>- '+qm(cc.disc)+'</b></div><div class="row" style="justify-content:space-between"><span>الصافي بعد الخصم</span><b>'+qm(cc.base)+'</b></div>':'')+(cc.rate>0?'<div class="row" style="justify-content:space-between"><span>الضريبة '+cc.rate+'%</span><b>'+qm(cc.tax)+'</b></div>':'')+'<div class="row" style="justify-content:space-between;border-top:1px solid var(--bd);padding-top:6px;margin-top:4px;font-size:15px"><span>الإجمالي</span><b style="color:var(--ac)">'+qm(cc.total)+' ريال</b></div>';};
   const fld=(label,node,parent)=>{const w=div("");w.style.marginBottom="8px";w.appendChild(el("label",{class:"lbl"},label));w.appendChild(node);(parent||c).appendChild(w);return w;};
@@ -1416,7 +1419,7 @@ function saveQuote(withPdf){
   let id=qEditId;
   if(id){S.quotes=S.quotes.map(x=>x.id===id?{...x,...q,id}:x);}
   else{id="q"+Date.now().toString(36);S.quotes.unshift({...q,id,created:Date.now()});}
-  save();qDraft=null;qEditId=null;showView("quotes");showAlert("تم حفظ العرض ✅");if(withPdf)pdfQuote(id);
+  save();qDraft=null;qEditId=null;showView("quotes");showAlert("تم حفظ "+qLbl(q)+" ✅");if(withPdf)pdfQuote(id);
 }
 
 /* ---- PDF renderer in the company template style ---- */
@@ -1469,9 +1472,10 @@ function qDate(d){return d?d.split("-").reverse().join("/"):"";}
 function qDocBuild(q,logo){
   const d=new QDoc(logo),cc=qCalc(q),x=d.x;
   // title
+  if(qIsPI(q)){d.txt("PROFORMA INVOICE",620,d.y+14,{sz:42,b:1,col:QC.navy,dir:"ltr",al:"center"});}else{
   d.f(34,false);const a=" عرض سعر",s1="Sales Estimation",sl=" / ";
   d.f(34,false);const wa=x.measureText("عرض سعر").width;d.f(42,true);const we=x.measureText(s1).width;d.f(42,false);const ws=x.measureText(sl).width;
-  const tx0=620-(wa+ws+we)/2;d.txt("عرض سعر",tx0,d.y+14,{sz:34,col:QC.navy,dir:"rtl",al:"left"});d.txt(sl,tx0+wa,d.y+14,{sz:42,col:QC.navy,dir:"ltr",al:"left"});d.txt(s1,tx0+wa+ws,d.y+14,{sz:42,b:1,col:QC.navy,dir:"ltr",al:"left"});
+  const tx0=620-(wa+ws+we)/2;d.txt("عرض سعر",tx0,d.y+14,{sz:34,col:QC.navy,dir:"rtl",al:"left"});d.txt(sl,tx0+wa,d.y+14,{sz:42,col:QC.navy,dir:"ltr",al:"left"});d.txt(s1,tx0+wa+ws,d.y+14,{sz:42,b:1,col:QC.navy,dir:"ltr",al:"left"});}
   d.y+=80;
   // info table (value | label inside each half)
   const hdrCell=(t,xp)=>({x:xp,w:545,lines:[{t:"",dir:"rtl"}],bg:QC.hdr});
@@ -1486,7 +1490,7 @@ function qDocBuild(q,logo){
   d.y+=34;
   d.txt("تفاصيل المواد والخدمات / Items & Services",1165,d.y,{sz:21,col:QC.navy,dir:"rtl"});d.y+=18;
   // items table
-  const hasCode=q.items.some(it=>(it.code||"").trim());
+  const hasCode=qIsPI(q)||q.items.some(it=>(it.code||"").trim());
   const W=hasCode?[55,100,180,300,75,70,120,190]:[55,0,200,400,75,70,120,170];
   const xs=[];let xr=1165;W.forEach(w=>{xr-=w;xs.push(xr);});
   const H=[["مسلسل","S.N"],["رقم الكود","Item No"],["اسم المنتج","Product Name"],["وصف المنتج","Description"],["وحدة","Unit"],["الكمية","Qty"],["السعر","Price"],["الإجمالي","Amount"]];
@@ -1535,10 +1539,10 @@ function qFinishPdf(d,name){
   return{pages:n,name:a.download};
 }
 async function pdfQuote(id){
-  const q=S.quotes.find(x=>x.id===id);if(!q)return;showAlert("جاري تجهيز عرض السعر...");
+  const q=S.quotes.find(x=>x.id===id);if(!q)return;showAlert("جاري تجهيز "+qLbl(q)+"...");
   const logo=_qLogo||await new Promise(res=>{const i=new Image();i.onload=()=>{_qLogo=i;res(i);};i.onerror=()=>res(null);i.src=QLOGO;});
-  const o=qFinishPdf(qDocBuild(q,logo),"عرض-سعر-"+(q.no?q.no+"-":"")+q.custName);
-  showAlert("✅ تم إنشاء عرض السعر ("+o.pages+" صفحة). افتحه من التنزيلات");
+  const o=qFinishPdf(qDocBuild(q,logo),(qIsPI(q)?"PI-":"عرض-سعر-")+(q.no?q.no+"-":"")+q.custName);
+  showAlert("✅ تم إنشاء "+qLbl(q)+" ("+o.pages+" صفحة). افتحه من التنزيلات");
 }
 
 function render(){
