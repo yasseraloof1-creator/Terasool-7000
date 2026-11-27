@@ -189,11 +189,13 @@ h2{font-size:16px;font-weight:700;margin-bottom:8px}
   <h3 style="margin-bottom:12px" id="vchTitle">🧾 سند قبض</h3>
   <div class="grid2" style="margin-bottom:8px"><div><label class="lbl">العميل</label><select id="vCust" class="inp" onchange="fillVchProj()"></select></div>
   <div><label class="lbl">أو اكتب الاسم</label><input id="vCustName" class="inp"></div></div>
+  <label class="lbl">رقم السند (تلقائي — تقدر تغيّره)</label><input id="vNum" type="number" min="1" class="inp" style="margin-bottom:8px">
   <div class="grid2" style="margin-bottom:8px"><div><label class="lbl">المبلغ (ريال)</label><input id="vAmount" type="number" step="any" class="inp"></div>
   <div><label class="lbl">التاريخ</label><input id="vDate" type="date" class="inp" style="color-scheme:var(--cs)"></div></div>
   <div class="grid2" style="margin-bottom:8px"><div><label class="lbl">طريقة الدفع</label><select id="vMethod" class="inp"></select></div>
   <div><label class="lbl">رقم مرجع (شيك / حوالة)</label><input id="vRef" class="inp"></div></div>
   <label class="lbl" id="vProjLbl">المشروع (اختياري)</label><select id="vProj" class="inp" style="margin-bottom:8px"></select>
+  <label class="lbl">اسم الحساب (يظهر بالـ PDF — اختياري)</label><input id="vAcct" class="inp" placeholder="فاضي = نقدية المحل الرئيسي للنقد، أو الحساب البنكي" style="margin-bottom:8px">
   <label class="lbl">ملاحظات</label><textarea id="vNote" class="inp" rows="2" style="margin-bottom:8px;resize:vertical"></textarea>
   <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer"><input type="checkbox" id="vBooked" style="width:18px;height:18px"> تم تسجيله بالمحاسبة</label>
   <div class="row"><button class="btn btn-ghost" style="flex:1" onclick="closeVchModal()">إلغاء</button><button class="btn" style="flex:2" onclick="saveVch()">💾 حفظ</button></div>
@@ -1103,7 +1105,7 @@ async function checkDueNow(force){
 }
 
 /* ===== vouchers (قبض / صرف) + project payments ===== */
-const PM=["نقداً","تحويل بنكي","شيك","حوالة","بطاقة","أخرى"];
+const PM=["نقداً","تحويل بنكي","شيك","وديعة","حوالة","بطاقة","أخرى"];
 const VF={in:"",out:"",q:""};
 let vchType="in",editingVchId=null,payProjId=null;
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
@@ -1127,9 +1129,9 @@ function openVchModal(type,id){
   $("vCust").innerHTML='<option value="">— اختر العميل —</option>'+S.customers.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join("");
   $("vCust").value=v&&v.customerId?v.customerId:"";
   $("vCustName").value=v&&!v.customerId?v.customerName:"";
-  $("vAmount").value=v?v.amount:"";$("vDate").value=v?v.date:todayStr();
+  $("vNum").value=v?v.seq:nextSeq(type);$("vAmount").value=v?v.amount:"";$("vDate").value=v?v.date:todayStr();
   $("vMethod").innerHTML=PM.map(m=>'<option'+(v&&v.method===m?" selected":"")+'>'+m+'</option>').join("");
-  $("vRef").value=v?v.ref||"":"";$("vNote").value=v?v.note||"":"";$("vBooked").checked=!!(v&&v.booked);
+  $("vAcct").value=v?v.acct||"":"";$("vRef").value=v?v.ref||"":"";$("vNote").value=v?v.note||"":"";$("vBooked").checked=!!(v&&v.booked);
   $("vProjLbl").textContent=type==="in"?"المشروع (اختياري — بيضاف كدفعة عليه)":"المشروع (اختياري)";
   fillVchProj();if(v&&v.projectId)$("vProj").value=v.projectId;
   $("vchModal").classList.add("open");
@@ -1140,7 +1142,9 @@ function saveVch(){
   const amount=parseFloat(g("vAmount"));if(!(amount>0)){showAlert("اكتب مبلغ صحيح","error");return;}
   const cid=g("vCust"),cu=S.customers.find(x=>x.id===cid),cname=cu?cu.name:g("vCustName");
   if(!cname){showAlert("اختر العميل أو اكتب اسمه","error");return;}
-  const fields={type:vchType,customerId:cid||"",customerName:cname,amount,date:g("vDate")||todayStr(),method:g("vMethod"),ref:g("vRef"),projectId:g("vProj"),note:g("vNote")};
+  let num=parseInt(g("vNum"),10);if(!(num>0))num=nextSeq(vchType);
+  if(S.vouchers.some(x=>x.type===vchType&&x.seq===num&&x.id!==editingVchId)){showAlert("رقم السند "+num+" مستخدم، اختر رقم ثاني","error");return;}
+  const fields={seq:num,type:vchType,customerId:cid||"",customerName:cname,amount,date:g("vDate")||todayStr(),method:g("vMethod"),ref:g("vRef"),projectId:g("vProj"),acct:g("vAcct"),note:g("vNote")};
   const booked=document.getElementById("vBooked").checked;
   let v=editingVchId?S.vouchers.find(x=>x.id===editingVchId):null;
   if(v){Object.assign(v,fields);if(booked&&!v.booked){v.booked=true;v.bookedAt=todayStr();}else if(!booked){v.booked=false;v.bookedAt="";}}
@@ -1196,9 +1200,9 @@ function rVouchers(c,type){
     bk.onclick=()=>toggleBooked(v.id);body.appendChild(bk);
     const row=div("row","margin-top:8px");
     const e1=el("button",{class:"sb"},"✏️ تعديل");e1.onclick=()=>openVchModal(v.type,v.id);
-    const s1=el("button",{class:"sb"},"📤 مشاركة");s1.onclick=()=>shareVch(v.id);
+    const p1=el("button",{class:"sb"},"📄 PDF");p1.onclick=()=>pdfVch(v.id);const s1=el("button",{class:"sb"},"📤 مشاركة");s1.onclick=()=>shareVch(v.id);
     const d1=el("button",{class:"sb d"},"🗑️");d1.onclick=()=>deleteVch(v.id);
-    row.appendChild(e1);row.appendChild(s1);row.appendChild(d1);body.appendChild(row);
+    row.appendChild(e1);row.appendChild(p1);row.appendChild(s1);row.appendChild(d1);body.appendChild(row);
     c.appendChild(cd);
   });
 }
@@ -1546,10 +1550,17 @@ function qCalc(q){
   const dv=+q.discVal||0,disc=Math.min(sub,r2(q.discType==="pct"?sub*dv/100:dv)),base=r2(sub-disc),rate=q.taxOn===false?0:(q.taxRate===""||q.taxRate==null?15:+q.taxRate),tax=Math.round(base*rate)/100;
   return{lines,sub,disc,base,rate,tax:r2(tax),total:r2(base+tax)};
 }
-const qIsPI=q=>q&&q.type==="pi";const qLbl=q=>qIsPI(q)?"فاتورة PI":"عرض سعر";
+const qIsPI=q=>q&&q.type==="pi";
+function qNextNo(type,exId){
+  let best=null;
+  S.quotes.forEach(x=>{if(x.id===exId||(qIsPI(x)?"pi":"quote")!==type)return;const m=String(x.no||"").match(/^(.*?)(\d+)(\D*)$/);if(!m)return;const n=parseInt(m[2],10);if(!best||n>best.n)best={n,pre:m[1],post:m[3],w:m[2].length,lz:m[2][0]==="0"};});
+  if(!best)return "1";
+  return best.pre+String(best.n+1).padStart(best.lz?best.w:0,"0")+best.post;
+}
+const qLbl=q=>qIsPI(q)?"فاتورة PI":"عرض سعر";
 function newQuote(t){return{type:t==="pi"?"pi":"quote",no:"",custId:"",custName:"",custTax:"",issue:todayStr(),due:"",items:[{code:"",name:"",desc:"",unit:"",qty:"",price:""}],discType:"amt",discVal:"",taxOn:true,taxRate:15,notes:"",issuer:"خالد"};}
-function openQuoteForm(id,t){qEditId=id||null;const q=id?S.quotes.find(x=>x.id===id):null;qDraft=q?JSON.parse(JSON.stringify(q)):newQuote(t);showView("quoteForm");}
-function dupQuote(id){const q=S.quotes.find(x=>x.id===id);if(!q)return;const c=JSON.parse(JSON.stringify(q));c.id="q"+Date.now().toString(36);c.no="";c.issue=todayStr();c.due="";c.created=Date.now();S.quotes.unshift(c);save();render();showAlert("تم نسخ العرض. افتحه وعدّل رقمه وتاريخه");}
+function openQuoteForm(id,t){qEditId=id||null;const q=id?S.quotes.find(x=>x.id===id):null;qDraft=q?JSON.parse(JSON.stringify(q)):newQuote(t);if(!q)qDraft.no=qNextNo(qDraft.type);showView("quoteForm");}
+function dupQuote(id){const q=S.quotes.find(x=>x.id===id);if(!q)return;const c=JSON.parse(JSON.stringify(q));c.id="q"+Date.now().toString(36);c.no=qNextNo(qIsPI(q)?"pi":"quote");c.issue=todayStr();c.due="";c.created=Date.now();S.quotes.unshift(c);save();render();showAlert("تم النسخ برقم جديد تلقائي. افتحه وعدّل التاريخ والبنود");}
 function delQuote(id){const q=S.quotes.find(x=>x.id===id);if(!q||!confirm("حذف عرض السعر "+(q.no?"رقم "+q.no+" ":"")+"للعميل "+q.custName+"؟"))return;S.quotes=S.quotes.filter(x=>x.id!==id);save();render();showAlert("تم حذف العرض","error");}
 function rQuotes(c){
   const top=div("section-title");top.appendChild(el("h2",{style:"margin:0"},"📄 عروض الأسعار و PI"));
@@ -1576,14 +1587,14 @@ function rQuotes(c){
 function rQuoteForm(c){
   if(!qDraft)qDraft=newQuote();const q=qDraft;
   c.appendChild(el("h2",{style:"margin-bottom:10px"},qEditId?"✏️ تعديل "+qLbl(q):"📄 "+qLbl(q)+" جديد"));
-  {const tw=div("row","gap:6px;margin-bottom:10px");[["quote","📄 عرض سعر"],["pi","🧾 فاتورة PI"]].forEach(([k,t])=>{const on=(q.type||"quote")===k;const b=el("button",{class:on?"btn":"btn btn-ghost",style:"flex:1;padding:9px 6px"},t);b.onclick=()=>{q.type=k;render();};tw.appendChild(b);});c.appendChild(tw);}
+  {const tw=div("row","gap:6px;margin-bottom:10px");[["quote","📄 عرض سعر"],["pi","🧾 فاتورة PI"]].forEach(([k,t])=>{const on=(q.type||"quote")===k;const b=el("button",{class:on?"btn":"btn btn-ghost",style:"flex:1;padding:9px 6px"},t);b.onclick=()=>{const old=q.type||"quote";if(!qEditId&&old!==k&&(!(q.no||"").trim()||q.no===qNextNo(old)))q.no=qNextNo(k);q.type=k;render();};tw.appendChild(b);});c.appendChild(tw);}
   let totBox;const upd=()=>{const cc=qCalc(q);q.items.forEach((it,i)=>{const sp=document.getElementById("qln"+i);if(sp)sp.textContent=qm(cc.lines[i]);});
     if(totBox)totBox.innerHTML='<div class="row" style="justify-content:space-between"><span>المجموع الفرعي</span><b>'+qm(cc.sub)+'</b></div>'+(cc.disc?'<div class="row" style="justify-content:space-between"><span>الخصم (قبل الضريبة)</span><b>- '+qm(cc.disc)+'</b></div><div class="row" style="justify-content:space-between"><span>الصافي بعد الخصم</span><b>'+qm(cc.base)+'</b></div>':'')+(cc.rate>0?'<div class="row" style="justify-content:space-between"><span>الضريبة '+cc.rate+'%</span><b>'+qm(cc.tax)+'</b></div>':'')+'<div class="row" style="justify-content:space-between;border-top:1px solid var(--bd);padding-top:6px;margin-top:4px;font-size:15px"><span>الإجمالي</span><b style="color:var(--ac)">'+qm(cc.total)+' ريال</b></div>';};
   const fld=(label,node,parent)=>{const w=div("");w.style.marginBottom="8px";w.appendChild(el("label",{class:"lbl"},label));w.appendChild(node);(parent||c).appendChild(w);return w;};
   const inp=(key,obj,type,ph)=>{const n=el("input",{class:"inp",type:type||"text",placeholder:ph||""});if(type==="number")n.step="any";n.value=obj[key]==null?"":obj[key];n.oninput=()=>{obj[key]=n.value;upd();};return n;};
   const box1=card();c.appendChild(box1);
   const g=div("grid2");g.style.marginBottom="8px";box1.appendChild(g);
-  fld("رقم العرض / الفاتورة",inp("no",q,"text"),g);
+  fld("رقم العرض / الفاتورة (تلقائي — تقدر تغيّره)",inp("no",q,"text"),g);
   fld("تاريخ الإصدار",(()=>{const n=inp("issue",q,"date");n.style.colorScheme="var(--cs)";return n;})(),g);
   const sel=el("select",{class:"inp"});sel.innerHTML='<option value="">— اختر عميل من القائمة —</option>'+S.customers.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'<option value="__o">عميل غير مسجّل (اكتب بياناته)</option>';
   sel.value=q.custId&&S.customers.some(x=>x.id===q.custId)?q.custId:(q.custName?"__o":"");
@@ -1631,6 +1642,9 @@ function saveQuote(withPdf){
   q.items=q.items.filter(it=>(it.name||"").trim()||(it.desc||"").trim()||it.qty!==""||it.price!=="");
   if(!(q.custName||"").trim()){showAlert("اختر العميل أو اكتب اسمه","error");if(!q.items.length)q.items=[{code:"",name:"",desc:"",unit:"",qty:"",price:""}];render();return;}
   if(!q.items.length){showAlert("أضف بند واحد على الأقل","error");q.items=[{code:"",name:"",desc:"",unit:"",qty:"",price:""}];render();return;}
+  const qt=qIsPI(q)?"pi":"quote";
+  if(!(q.no||"").trim())q.no=qNextNo(qt,qEditId);
+  if(S.quotes.some(x=>x.id!==qEditId&&(qIsPI(x)?"pi":"quote")===qt&&String(x.no||"").trim()===String(q.no).trim())&&!confirm("الرقم "+q.no+" مستخدم لـ"+qLbl(q)+" ثاني. تكمل بنفس الرقم؟"))return;
   let id=qEditId;
   if(id){S.quotes=S.quotes.map(x=>x.id===id?{...x,...q,id}:x);}
   else{id="q"+Date.now().toString(36);S.quotes.unshift({...q,id,created:Date.now()});}
@@ -1758,6 +1772,74 @@ async function pdfQuote(id){
   const logo=_qLogo||await new Promise(res=>{const i=new Image();i.onload=()=>{_qLogo=i;res(i);};i.onerror=()=>res(null);i.src=QLOGO;});
   const o=qFinishPdf(qDocBuild(q,logo),(qIsPI(q)?"PI-":"عرض-سعر-")+(q.no?q.no+"-":"")+q.custName);
   showAlert("✅ تم إنشاء "+qLbl(q)+" ("+o.pages+" صفحة). افتحه من التنزيلات");
+}
+
+/* ===== سندات القبض والصرف PDF ===== */
+function vMethodKey(m){return{"نقداً":"cash","شيك":"cheque","وديعة":"deposit","تحويل بنكي":"transfer","حوالة":"transfer","بطاقة":"transfer"}[m]||"";}
+function qRR(x,xp,y,w,h,r){x.beginPath();x.moveTo(xp+r,y);x.arcTo(xp+w,y,xp+w,y+h,r);x.arcTo(xp+w,y+h,xp,y+h,r);x.arcTo(xp,y+h,xp,y,r);x.arcTo(xp,y,xp+w,y,r);x.closePath();x.fill();}
+function vDocBuild(v,logo){
+  const d=new QDoc(logo),x=d.x,isIn=v.type==="in",L=75,R=1165,mk=vMethodKey(v.method);
+  const bar=(xp,w,en,ar,h)=>{h=h||44;x.fillStyle=QC.blue;x.fillRect(xp,d.y,w,h);d.txt(en,xp+14,d.y+h-14,{sz:20,col:"#fff",dir:"ltr",al:"left"});d.txt(ar,xp+w-14,d.y+h-14,{sz:20,col:"#fff",dir:"rtl",al:"right"});};
+  const box=(xp,w,h,val,sz,b)=>{x.strokeStyle=QC.line;x.lineWidth=1.5;x.strokeRect(xp,d.y,w,h);if(val){const dir=qDir(val);d.txt(val,dir==="rtl"?xp+w-14:xp+14,d.y+h/2+8,{sz:sz||21,b:b,dir:dir,al:dir==="rtl"?"right":"left"});}};
+  // العنوان
+  d.txt(isIn?"Receipts/Incoming Payments":"Payments/Outgoing Payments",620,d.y+12,{sz:38,b:1,col:QC.navy,dir:"ltr",al:"center"});
+  d.txt((isIn?"سند القبض ":"سند الصرف ")+"#"+(v.seq||0),620,d.y+66,{sz:36,b:1,col:QC.navy,dir:"rtl",al:"center"});
+  d.y+=104;
+  d.txt("Vat No: "+QCO.tax,L,d.y+6,{sz:19,dir:"ltr",al:"left"});d.txt("الرقم الضريبي: "+QCO.tax,R,d.y+6,{sz:19,dir:"rtl",al:"right"});
+  d.y+=38;
+  // التاريخ
+  const dt=qDate(v.date)||"";
+  const dbox=xp=>{x.fillStyle=QC.blue;qRR(x,xp,d.y,190,46,6);d.txt(dt,xp+95,d.y+32,{sz:21,col:"#fff",dir:"ltr",al:"center"});};
+  d.txt("Date:",L,d.y+32,{sz:21,b:1,dir:"ltr",al:"left"});dbox(L+82);
+  d.txt("التاريخ:",R,d.y+32,{sz:21,b:1,dir:"rtl",al:"right"});dbox(R-112-190);
+  d.y+=76;
+  // طريقة الدفع (علامة صح)
+  const opts=[["transfer","تحويل او النقل الالكتروني","Transfer"],["deposit","وديعة","Deposit"],["cheque","شيك","Cheque"],["cash","النقد","Cash"]];
+  let rx=R;
+  opts.forEach(o=>{
+    d.f(21,false);x.direction="rtl";const wa=x.measureText(o[1]).width;d.f(21,true);x.direction="ltr";const we=x.measureText(o[2]).width;
+    d.txt(o[1],rx,d.y+26,{sz:21,dir:"rtl",al:"right"});d.txt(o[2],rx-wa-16,d.y+26,{sz:21,b:1,dir:"ltr",al:"right"});
+    const bx=rx-wa-16-we-14-34;x.fillStyle=QC.blue;qRR(x,bx,d.y,34,34,6);
+    if(mk===o[0]){x.strokeStyle="#fff";x.lineWidth=4.5;x.lineCap="round";x.lineJoin="round";x.beginPath();x.moveTo(bx+8,d.y+18);x.lineTo(bx+15,d.y+25);x.lineTo(bx+27,d.y+9);x.stroke();}
+    rx=bx-42;
+  });
+  d.y+=64;
+  // اسم الحساب
+  bar(L,1090,"Account Name","اسم الحساب");d.y+=44;
+  const acct=(v.acct||"").trim()||(mk==="cash"?"نقدية المحل الرئيسي":(mk?"الحساب البنكي":""));
+  box(L,1090,78,acct,22);d.y+=78+28;
+  // المبلغ / أنشأ بواسطة / رقم الحوالة
+  [[R-355,"Document Number","رقم الحوالة",v.ref||""],[R-355*2-12,"Created by","انشأ بواسطة","خالد"],[L,"Amount of","المبلغ",qm(v.amount)]].forEach(c=>{
+    const y0=d.y;bar(c[0],355,c[1],c[2],42);d.y+=42;box(c[0],355,58,c[3],21);d.y=y0;
+  });
+  d.y+=42+58+28;
+  // جدول السطر
+  const p=S.projects.find(z=>z.id===v.projectId);
+  const CW=[170,250,140,225,135,170],CX=[];let cx=L;CW.forEach(w=>{CX.push(cx);cx+=w;});
+  const HD=[["رمز الحساب","Account Code"],["أسم الحساب","Account Name"],["المبلغ","Amount"],["الوصف","Description"],["رقم المصدر","Source Number"],["ملاحظات","Notes"]];
+  d.flow(HD.map((h,i)=>({x:CX[i],w:CW[i],bg:QC.blue,col:"#fff",al:i===0||i===2?"c":"right",lines:[{t:h[0],dir:"rtl",sz:17},{t:h[1],dir:"ltr",b:true,sz:16}]})),{lh:26,pad:10});
+  const rowT=["",v.customerName||"",qm(v.amount),p?p.name:"","",""];
+  d.flow(rowT.map((t,i)=>({x:CX[i],w:CW[i],al:i===0||i===2?"c":null,b:i===1,lines:d.wrap(t,CW[i]-24,20,i===1)})),{lh:30,pad:14});
+  d.y+=30;
+  // وصف
+  const nl=d.wrap(v.note||"",1090-30,21,false);while(nl.length<5)nl.push({t:"",dir:"rtl"});
+  d.need(42+nl.length*32+32+40);
+  bar(L,1090,"Description","وصف",42);d.y+=42;
+  d.flow([{x:L,w:1090,al:null,lines:nl}],{lh:32,pad:16});
+  // التواقيع
+  let sy=Math.max(d.y+90,1530);if(sy>1650){d.newPage();sy=480;}
+  [["المستلم","The Recipient's Signature"],["توقيع المحاسب","The Accountant's Signature"],["توقيع المدير","The Manager's Signature"]].forEach((s,i)=>{
+    const xr=R-i*365,xl=xr-360;x.strokeStyle="#555";x.lineWidth=2;x.beginPath();x.moveTo(xl,sy);x.lineTo(xr,sy);x.stroke();
+    d.txt(s[0],xr,sy+36,{sz:19,b:1,dir:"rtl",al:"right"});d.txt(s[1],xl,sy+36,{sz:15.5,b:1,dir:"ltr",al:"left"});
+    if(i===2)d.txt(QCO.ar,xr-18,sy-14,{sz:19,dir:"rtl",al:"right"});
+  });
+  return d;
+}
+async function pdfVch(id){
+  const v=S.vouchers.find(x=>x.id===id);if(!v)return;const lb=v.type==="in"?"سند القبض":"سند الصرف";showAlert("جاري تجهيز "+lb+"...");
+  const logo=_qLogo||await new Promise(res=>{const i=new Image();i.onload=()=>{_qLogo=i;res(i);};i.onerror=()=>res(null);i.src=QLOGO;});
+  const o=qFinishPdf(vDocBuild(v,logo),(v.type==="in"?"سند-قبض-":"سند-صرف-")+vNo(v)+"-"+(v.customerName||""));
+  showAlert("✅ تم إنشاء "+lb+". افتحه من التنزيلات");
 }
 
 function render(){
